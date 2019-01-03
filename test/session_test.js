@@ -22,7 +22,11 @@ Session.use('002', s => {
             sorting: [{"dataKey":"aaa027","sortDirection":"ascending"}]
         }
     }));
-    let rep = fromJson(s.get());
-    let data = new Data(rep.datas[0], DyshInfo.response);
-    console.log(data.idcard, data.retireDate);
+    let ret = s.get();
+    //console.log(ret);
+    // let rep = fromJson(ret);
+    // rep.datas.forEach(v => {
+    //     let data = new Data(v, DyshInfo.response);
+    //     console.log(data);
+    // })
 })
