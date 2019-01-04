@@ -3,6 +3,7 @@
 const Xlsx = require('xlsx-populate')
 const { Session, Service } = require('../lib/session');
 const { fromJson, Data, DyshInfo, BankAccountInfo } = Service;
+const dateFormat = require('dateformat');
 
 /*
 Session.use('002', s => {
@@ -18,16 +19,16 @@ Session.use('002', s => {
 const inXslx = 'D:\\待遇核定\\养老金计算表模板.xlsx';
 const outXlsx = 'D:\\待遇核定\\养老金计算表模板.out.xlsx';
 
-Session.use('002', s => {
+Session.use('002', session => {
     function getPaymentReport(name, idcard, retry = 3) {
-        s.send(DyshInfo.request({
+        session.send(DyshInfo.request({
             idcard,
             shzt: '0'
         }));
-        let dyshInfo = fromJson(s.get());
+        let dyshInfo = fromJson(session.get());
         if (dyshInfo.datas && dyshInfo.datas[0]) {
-            s.send(BankAccountInfo.request(idcard));
-            let bankAccountInfo = fromJson(s.get());
+            session.send(BankAccountInfo.request(idcard));
+            let bankAccountInfo = fromJson(session.get());
             DyshInfo.paymentInfo(dyshInfo.datas[0]).then(v => {
                 Xlsx.fromFileAsync(inXslx).then(workbook => {
                     let sheet = workbook.sheet(0);
@@ -63,10 +64,15 @@ Session.use('002', s => {
                     sheet.cell('K11').value(v[28]);
                     sheet.cell('L11').value(v[29]);
 
+                    sheet.cell('H12').value(
+                        `制表时间：${dateFormat(new Date(), 'yyyy-mm-dd HH:MM:ss')}`
+                    );
+
                     if (bankAccountInfo.data && bankAccountInfo.data[0]) {
                         let d = new Data(bankAccountInfo.data[0], BankAccountInfo.response);
                         sheet.cell('B15').value(d.name);
-                        sheet.cell('F15').value(d.bankType);
+                        let bankName = BankAccountInfo.bankName(d.bankType);
+                        if (bankName) sheet.cell('F15').value(bankName);
                         sheet.cell('J15').value(d.card);
                     } else {
                         sheet.cell('B15').value('未绑定银行账户');

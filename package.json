@@ -10,10 +10,8 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "cfb": "^1.0.7",
-    "jszip": "^3.1.5",
     "lodash": "^4.17.10",
-    "sax": "^1.2.4",
+    "dateformat": "^3.0.3",
     "xlsx-populate": "file://../xlsx-populate",
     "netlinkwrapper": "file://../netlinkwrapper"
   }
