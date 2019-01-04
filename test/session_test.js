@@ -2,7 +2,7 @@
 
 const Xlsx = require('xlsx-populate')
 const { Session, Service } = require('../lib/session');
-const { fromJson, Data, DyshInfo } = Service;
+const { fromJson, Data, DyshInfo, BankAccountInfo } = Service;
 
 /*
 Session.use('002', s => {
@@ -19,20 +19,17 @@ const inXslx = 'D:\\待遇核定\\养老金计算表模板.xlsx';
 const outXlsx = 'D:\\待遇核定\\养老金计算表模板.out.xlsx';
 
 Session.use('002', s => {
-    let idcard = '430311195812311524';//'430311195812281513'; 
-    s.send(DyshInfo.request({
-        idcard,
-        shzt: '0',
-        options: {
-            pagesize: 500,
-            sorting: [{"dataKey":"aaa027","sortDirection":"ascending"}]
-        }
-    }));
-    let rep = fromJson(s.get());
-    if (rep.datas && rep.datas[0]) {
-        DyshInfo.paymentInfo(rep.datas[0]).then(v => {
-            Xlsx.fromFileAsync(inXslx)
-                .then(workbook => {
+    function getPaymentReport(name, idcard, retry = 3) {
+        s.send(DyshInfo.request({
+            idcard,
+            shzt: '0'
+        }));
+        let dyshInfo = fromJson(s.get());
+        if (dyshInfo.datas && dyshInfo.datas[0]) {
+            s.send(BankAccountInfo.request(idcard));
+            let bankAccountInfo = fromJson(s.get());
+            DyshInfo.paymentInfo(dyshInfo.datas[0]).then(v => {
+                Xlsx.fromFileAsync(inXslx).then(workbook => {
                     let sheet = workbook.sheet(0);
                     sheet.cell('A5').value(v[1]);
                     sheet.cell('B5').value(v[2]);
@@ -66,10 +63,8 @@ Session.use('002', s => {
                     sheet.cell('K11').value(v[28]);
                     sheet.cell('L11').value(v[29]);
 
-                    s.send(Service.BankAccountInfo.request(idcard));
-                    let r = fromJson(s.get());
-                    if (r.data && r.data[0]) {
-                        let d = new Data(r.data[0], Service.BankAccountInfo.response);
+                    if (bankAccountInfo.data && bankAccountInfo.data[0]) {
+                        let d = new Data(bankAccountInfo.data[0], BankAccountInfo.response);
                         sheet.cell('B15').value(d.name);
                         sheet.cell('F15').value(d.bankType);
                         sheet.cell('J15').value(d.card);
@@ -79,11 +74,16 @@ Session.use('002', s => {
 
                     workbook.toFileAsync(outXlsx);
                 });
-
-        });
+            });
+        } else {
+            if (retry > 1) {
+                getPaymentReport(idcard, --retry);
+            } else {
+                console.error(`${idcard} ${name} 无法获得养老金计算信息`);
+            }
+        }
     }
-    // rep.datas.forEach(v => {
-    //     let data = new Data(v, DyshInfo.response);
-    //     console.log(data);
-    // })
+
+    [['张某', '430311195812311524'], ['李某', '430311195812281513']]
+        .forEach(([name, idcard]) => getPaymentReport(name, idcard));
 })
