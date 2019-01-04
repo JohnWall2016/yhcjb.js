@@ -16,15 +16,19 @@ Session.use('002', s => {
 
 Session.use('002', s => {
     s.send(DyshInfo.request({
+        idcard: '430311195812281513',
         shzt: '0',
         options: {
             pagesize: 500,
             sorting: [{"dataKey":"aaa027","sortDirection":"ascending"}]
         }
     }));
-    let ret = s.get();
-    //console.log(ret);
-    // let rep = fromJson(ret);
+    let rep = fromJson(s.get());
+    if (rep.datas && rep.datas[0]) {
+        DyshInfo.paymentInfo(rep.datas[0]).then(v => {
+            console.log(v);
+        });
+    }
     // rep.datas.forEach(v => {
     //     let data = new Data(v, DyshInfo.response);
     //     console.log(data);
