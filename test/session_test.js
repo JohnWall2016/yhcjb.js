@@ -70,10 +70,19 @@ Session.use('002', session => {
 
                     if (bankAccountInfo.data && bankAccountInfo.data[0]) {
                         let d = new Data(bankAccountInfo.data[0], BankAccountInfo.response);
-                        sheet.cell('B15').value(d.name);
+                        if (d.name) sheet.cell('B15').value(d.name);
                         let bankName = BankAccountInfo.bankName(d.bankType);
                         if (bankName) sheet.cell('F15').value(bankName);
-                        sheet.cell('J15').value(d.card);
+                        let card = d.card;
+                        if (card) {
+                            let l = card.length;
+                            if (l > 7) {
+                                card = card.substr(0, 3) + '*'.repeat(l - 7) + card.substr(l - 4);
+                            } else if (l > 4) {
+                                card = '*'.repeat(l - 4) + card.substr(l - 4);
+                            }
+                            sheet.cell('J15').value(card);
+                        }
                     } else {
                         sheet.cell('B15').value('未绑定银行账户');
                     }
@@ -92,4 +101,4 @@ Session.use('002', session => {
 
     [['张某', '430311195812311524'], ['李某', '430311195812281513']]
         .forEach(([name, idcard]) => getPaymentReport(name, idcard));
-})
+});
