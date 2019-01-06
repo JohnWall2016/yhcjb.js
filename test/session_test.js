@@ -4,6 +4,7 @@ const Xlsx = require('xlsx-populate')
 const { Session, Service } = require('../lib/session');
 const { fromJson, Data, DyshInfo, BankAccountInfo } = Service;
 const dateFormat = require('dateformat');
+const path = require('path');
 
 /*
 Session.use('002', s => {
@@ -17,10 +18,9 @@ Session.use('002', s => {
 */
 
 const inXslx = 'D:\\待遇核定\\养老金计算表模板.xlsx';
-const outXlsx = 'D:\\待遇核定\\养老金计算表模板.out.xlsx';
 
 Session.use('002', session => {
-    function getPaymentReport(name, idcard, retry = 3) {
+    function getPaymentReport(name, idcard, outdir, retry = 3) {
         session.send(DyshInfo.request({
             idcard,
             shzt: '0'
@@ -30,6 +30,7 @@ Session.use('002', session => {
             session.send(BankAccountInfo.request(idcard));
             let bankAccountInfo = fromJson(session.get());
             DyshInfo.paymentInfo(dyshInfo.datas[0]).then(v => {
+                if (!v) throw new Error('养老金计算信息无效');
                 Xlsx.fromFileAsync(inXslx).then(workbook => {
                     let sheet = workbook.sheet(0);
                     sheet.cell('A5').value(v[1]);
@@ -87,15 +88,18 @@ Session.use('002', session => {
                         sheet.cell('B15').value('未绑定银行账户');
                     }
 
-                    workbook.toFileAsync(outXlsx);
+                    workbook.toFileAsync(path.join(outdir, `${name}[${idcard}]养老金计算表.xlsx`));
                 });
-            });
+            }).catch(err => {
+                console.error(`${idcard} ${name} 获得养老金计算信息岀错: ${err}`);
+                if (retry > 1) {
+                    getPaymentReport(name, idcard, outdir, --retry);
+                } else {
+                    console.error(`${idcard} ${name} 无法获得养老金计算信息`);
+                }
+                });
         } else {
-            if (retry > 1) {
-                getPaymentReport(idcard, --retry);
-            } else {
-                console.error(`${idcard} ${name} 无法获得养老金计算信息`);
-            }
+            console.error(`${idcard} ${name} 未查到该人员核定数据`);
         }
     }
 
