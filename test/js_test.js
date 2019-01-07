@@ -31,10 +31,56 @@ console.log(name);
 const dateFormat = require('dateformat');
 console.log(`${dateFormat(new Date(), 'yyyy-mm-dd HH:MM:ss')}`);
 */
-
+/*
 const util = require('util');
 const setImmediatePromise = util.promisify(setImmediate);
 console.log(setImmediate[util.promisify.custom] == setImmediatePromise);
 setImmediatePromise(['hello', 'world']).then(([a, b]) => {
     console.log(a, b);
 });
+*/
+
+class Response {
+    constructor(json) {
+        Object.assign(this, JSON.parse(json));
+        this._datas = this.datas;
+        let self = this;
+        this.datas = new Proxy(this._datas, {
+            get: function(target, name) {
+                if (!target || !target[name]) {
+                    return undefined;
+                }
+                return new Proxy(target[name], {
+                    get: function(target, name) {
+                        return target[self.field(name)];
+                    }
+                });
+            }
+        });
+    }
+
+    field(name) {
+        let field = name;
+        let f;
+        console.log(this.constructor.name);
+        console.log(super.constructor.name);
+        if (this.constructor.datasMap && (f = this.constructor.datasMap[name])) {
+            field = f;
+        } else if (super.field && (f = super.field(name))) {
+            field = f;
+        }
+        return field;
+    }
+}
+
+Response.datasMap = {
+    'A': 'a'
+}
+
+class Response2 extends Response {}
+Response2.datasMap = {
+    'B': 'b'
+}
+
+let r = new Response2(`{"r":"fine", "datas":[{"a": 1, "b": 2}]}`);
+console.log(r.r, r.datas[0].A, r.datas[0].a, r.datas[0].B);
