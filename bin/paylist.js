@@ -1,8 +1,8 @@
 'use strict';
 
 const Xlsx = require('xlsx-populate')
-const { Session, Service } = require('../lib/session');
-const { fromJson, Data, DyshInfo } = Service;
+const Session = require('../lib/session');
+const { DyshInfoRequest, DyshInfoResponse } = require('../lib/service');
 
 if (process.argv.length != 3) {
     console.error('node <this file> 年月');
@@ -30,23 +30,22 @@ function downloadPaylist() {
         let sheet = workbook.sheet(0);
         let [startRow, currentRow] = [4, 4];
 
-        Session.use('002', s => {
-            s.send(DyshInfo.request({
+        Session.use('002', session => {
+            session.send(new DyshInfoRequest({
                 shzt: '0',
                 options: {
                     pagesize: 500,
                     sorting: [{"dataKey":"aaa027","sortDirection":"ascending"}]
                 }
             }));
-            let rep = fromJson(s.get());
-            rep.datas.forEach((value, index) => {
+            let dyshInfo = new DyshInfoResponse(session.get());
+            dyshInfo.datas.forEach((data, index) => {
                 let row;
                 if (currentRow > startRow)
                     row = sheet.insertAndCopyRow(currentRow, startRow, true);
                 else
                     row = sheet.row(currentRow);
-                let data = new Data(value, DyshInfo.response);
-                
+                                    
                 console.log(`${index+1} ${data.idcard} ${data.name}`);
 
                 row.cell('A').value(index + 1);

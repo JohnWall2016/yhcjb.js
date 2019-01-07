@@ -52,24 +52,16 @@ class Response {
                 }
                 return new Proxy(target[name], {
                     get: function(target, name) {
-                        return target[self.field(name)];
+                        let field;
+                        if (self.constructor.datasMap &&
+                            (field = self.constructor.datasMap[name])) {
+                            return target[field];
+                        }
+                        return target[name];
                     }
                 });
             }
         });
-    }
-
-    field(name) {
-        let field = name;
-        let f;
-        console.log(this.constructor.name);
-        console.log(super.constructor.name);
-        if (this.constructor.datasMap && (f = this.constructor.datasMap[name])) {
-            field = f;
-        } else if (super.field && (f = super.field(name))) {
-            field = f;
-        }
-        return field;
     }
 }
 
@@ -79,8 +71,8 @@ Response.datasMap = {
 
 class Response2 extends Response {}
 Response2.datasMap = {
-    'B': 'b'
+    'B': 'b', ...Response.datasMap
 }
 
 let r = new Response2(`{"r":"fine", "datas":[{"a": 1, "b": 2}]}`);
-console.log(r.r, r.datas[0].A, r.datas[0].a, r.datas[0].B);
+console.log(r.r, r.datas[0].A, r.datas[0].a, r.datas[0].B, r.datas[1]);

@@ -1,35 +1,38 @@
 'use strict';
 
 const Xlsx = require('xlsx-populate')
-const { Session, Service } = require('../lib/session');
-const { fromJson, Data, DyshInfo, BankAccountInfo } = Service;
+const Session = require('../lib/session');
+const { 
+    Response, GrinfoRequest, DyshInfoRequest, DyshInfoResponse,
+    BankAccountInfoRequest, BankAccountInfoResponse
+} = require('../lib/service');
 const dateFormat = require('dateformat');
 const path = require('path');
 
 /*
 Session.use('002', s => {
-    s.send(Service.Grinfo({idcard: '430311195702091516'}));
-    let rep = s.get();
-    console.log(rep);
-    let data = new Data(fromJson(rep).datas[0]);
+    s.send(new GrinfoRequest('430311195702091516'));
+    let data = s.get();
     console.log(data);
-    console.log(data.idcard);
+    let rep = new Response(data);
+    console.log(rep.datas[0], rep.datas[0].idcard);
 });
 */
 
 const inXslx = 'D:\\待遇核定\\养老金计算表模板.xlsx';
+const outdir = 'D:\\待遇核定';
 
 Session.use('002', session => {
     function getPaymentReport(name, idcard, outdir, retry = 3) {
-        session.send(DyshInfo.request({
+        session.send(new DyshInfoRequest({
             idcard,
             shzt: '0'
         }));
-        let dyshInfo = fromJson(session.get());
+        let dyshInfo = new DyshInfoResponse(session.get());
         if (dyshInfo.datas && dyshInfo.datas[0]) {
-            session.send(BankAccountInfo.request(idcard));
-            let bankAccountInfo = fromJson(session.get());
-            DyshInfo.paymentInfo(dyshInfo.datas[0]).then(v => {
+            session.send(new BankAccountInfoRequest(idcard));
+            let bankAccountInfo = new BankAccountInfoResponse(session.get());
+            dyshInfo.datas[0].paymentInfo.then(v => {
                 if (!v) throw new Error('养老金计算信息无效');
                 Xlsx.fromFileAsync(inXslx).then(workbook => {
                     let sheet = workbook.sheet(0);
@@ -69,10 +72,10 @@ Session.use('002', session => {
                         `制表时间：${dateFormat(new Date(), 'yyyy-mm-dd HH:MM:ss')}`
                     );
 
-                    if (bankAccountInfo.data && bankAccountInfo.data[0]) {
-                        let d = new Data(bankAccountInfo.data[0], BankAccountInfo.response);
+                    if (bankAccountInfo.datas && bankAccountInfo.datas[0]) {
+                        let d = bankAccountInfo.datas[0];
                         if (d.name) sheet.cell('B15').value(d.name);
-                        let bankName = BankAccountInfo.bankName(d.bankType);
+                        let bankName = d.bankName;
                         if (bankName) sheet.cell('F15').value(bankName);
                         let card = d.card;
                         if (card) {
@@ -104,5 +107,5 @@ Session.use('002', session => {
     }
 
     [['张某', '430311195812311524'], ['李某', '430311195812281513']]
-        .forEach(([name, idcard]) => getPaymentReport(name, idcard));
+        .forEach(([name, idcard]) => getPaymentReport(name, idcard, outdir));
 });
