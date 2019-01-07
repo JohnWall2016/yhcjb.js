@@ -2,6 +2,7 @@
 
 const Xlsx = require('xlsx-populate')
 const Session = require('../lib/session');
+const HttpNetlink = require('../lib/netlink');
 const { 
     Response, GrinfoRequest, DyshInfoRequest, DyshInfoResponse,
     BankAccountInfoRequest, BankAccountInfoResponse
@@ -18,7 +19,7 @@ Session.use('002', s => {
     console.log(rep.datas[0], rep.datas[0].idcard);
 });
 */
-
+/*
 const inXslx = 'D:\\待遇核定\\养老金计算表模板.xlsx';
 const outdir = 'D:\\待遇核定';
 
@@ -109,3 +110,17 @@ Session.use('002', session => {
     [['张某', '430311195812311524'], ['李某', '430311195812281513']]
         .forEach(([name, idcard]) => getPaymentReport(name, idcard, outdir));
 });
+*/
+
+console.log('start1')
+let net = new HttpNetlink('10.136.6.99', 7010);
+console.log('start2')
+try {
+    net.getHttp(`/hncjb/reports?method=htmlcontent&name=yljjs&aaz170=19668513&aaz159=1347208&aac001=1002266493&aaz157=1357262&aaa129=%E6%B9%98%E6%BD%AD%E5%B8%82%E9%9B%A8%E6%B9%96%E5%8C%BA&aae211=201901`);
+    console.log('start3')
+    let content = net.readBody();
+    console.log('start4')
+    console.log(content);
+} finally {
+    if (net) net.close();
+}
