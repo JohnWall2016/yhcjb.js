@@ -4,7 +4,8 @@ const fs = require('fs');
 const path = require('path');
 
 const dateFormat = require('dateformat');
-const Xlsx = require('xlsx-populate')
+const Xlsx = require('xlsx-populate');
+const program = require('commander');
 
 const Session = require('../lib/session');
 const { 
@@ -17,32 +18,59 @@ function stop(msg, code = -1) {
     process.exit(code);
 }
 
-if (process.argv.length < 4) {
-    console.error('node <this file> 年月 命令');
-    console.error('  年月: 格式 YYYYMM, 如 201901');
-    console.error('  命令: download | split')
-    process.exit(-1);
-}
-
-const yearMonth = process.argv[2];
-
-const command = process.argv[3];
-
-const [year, month] = (function() {
+function getYearMonth(yearMonth) {
     let m
     if (m = yearMonth.match(/^(\d\d\d\d)(\d\d)$/)) {
         return [m[1], `${m[2][0]=='0'?m[2].substr(1):m[2]}`];
     } else {
         stop('年月格式有误');
     }
-})();
+}
 
-const infoXlsx = 'D:\\待遇核定\\信息核对报告表模板.xlsx';
-const saveXlsx = `D:\\待遇核定\\信息核对报告表模板${yearMonth}.xlsx`;
-const payInfoXslx = 'D:\\待遇核定\\养老金计算表模板.xlsx';
-const outputDir = `D:\\待遇核定\\${year}年${month}月待遇核定数据`;
+const rootDir = 'D:\\待遇核定';
+const infoXlsx = `${rootDir}\\信息核对报告表模板.xlsx`;
+const payInfoXslx = `${rootDir}\\养老金计算表模板.xlsx`;
 
-function downloadPaylist() {
+program
+    .version('0.0.1')
+    .description('信息核对报告表和养老金计算表生成程序')
+program
+    .command('download')
+    .arguments('<年月>')
+    .description(
+        '从业务系统下载信息核对报告表'
+    )
+    .action((yearMonth) => {
+        getYearMonth(yearMonth);
+        const saveXlsx = `${rootDir}\\信息核对报告表模板${yearMonth}.xlsx`;
+        downloadPaylist(infoXlsx, saveXlsx);
+    })
+program
+    .command('split')
+    .arguments('<年月> <开始行> <结束行>')
+    .description(
+        '对下载的信息表分组并生成养老金计算表'
+    )
+    .action((yearMonth, start, end) => {
+        const [year, month] = getYearMonth(yearMonth);
+        if ((start = parseInt(process.argv[4])) &&
+            (end = parseInt(process.argv[5]))) {
+            const saveXlsx = `${rootDir}\\信息核对报告表模板${yearMonth}.xlsx`;
+            const outputDir = `${rootDir}\\${year}年${month}月待遇核定数据`;
+            splitPaylist(infoXlsx, saveXlsx, payInfoXslx, outputDir, start, end);
+        } else {
+            stop('split 命令后应跟 开始 结束 行号');
+        }
+    })
+program.on('--help', () => {
+    console.log(
+        '\n说明\n'+
+        '  年月: 格式 YYYYMM, 如 201901'
+    );
+})
+program.parse(process.argv);
+
+function downloadPaylist(infoXlsx, saveXlsx) {
     Xlsx.fromFileAsync(infoXlsx).then(workbook => {
         let sheet = workbook.sheet(0);
         let [startRow, currentRow] = [4, 4];
@@ -95,7 +123,7 @@ const reXzhq = [
     /湘潭市雨湖区((.*?镇)(.*?政府机关))/
 ]
 
-async function splitPaylist(start, end) {
+async function splitPaylist(infoXlsx, saveXlsx, payInfoXslx, outputDir, start, end) {
     let workbook = await Xlsx.fromFileAsync(saveXlsx);
     let sheet = workbook.sheet(0);
 
@@ -276,20 +304,4 @@ async function splitPaylist(start, end) {
             }
         }
     });
-}
-
-if (command == 'download') {
-    downloadPaylist();
-}
-else if (command == 'split') {
-    let start, end
-    if (process.argv.length >= 6 &&
-        (start = parseInt(process.argv[4])) &&
-        (end = parseInt(process.argv[5]))) {
-        splitPaylist(start, end);
-    } else {
-        stop('split 命令后应跟 开始 结束 行号');
-    }
-} else {
-    stop('未知命令');
 }
