@@ -39,7 +39,7 @@ setImmediatePromise(['hello', 'world']).then(([a, b]) => {
     console.log(a, b);
 });
 */
-
+/*
 class Response {
     constructor(json) {
         Object.assign(this, JSON.parse(json));
@@ -76,3 +76,11 @@ Response2.datasMap = {
 
 let r = new Response2(`{"r":"fine", "datas":[{"a": 1, "b": 2}]}`);
 console.log(r.r, r.datas[0].A, r.datas[0].a, r.datas[0].B, r.datas[1]);
+*/
+const dateFormat = require('dateformat');
+console.log(`${dateFormat(new Date(), 'yyyy-mm-dd HH:MM:ss')}`);
+
+let date = dateFormat(new Date(), 'yyyymmdd');
+let dateChinese = dateFormat(new Date(), 'yyyy年m月d日');
+let dateChinese2 = dateFormat(new Date(2019, 10, 10), 'yyyy年m月d日');
+console.log(date, dateChinese, dateChinese2);
