@@ -10,7 +10,7 @@ const {
 const dateFormat = require('dateformat');
 const path = require('path');
 
-/*
+
 Session.use('002', s => {
     s.send(new GrinfoRequest('430311195702091516'));
     let data = s.get();
@@ -18,7 +18,7 @@ Session.use('002', s => {
     let rep = new Response(data);
     console.log(rep.datas[0], rep.datas[0].idcard);
 });
-*/
+
 /*
 const inXslx = 'D:\\待遇核定\\养老金计算表模板.xlsx';
 const outdir = 'D:\\待遇核定';
@@ -111,7 +111,7 @@ Session.use('002', session => {
         .forEach(([name, idcard]) => getPaymentReport(name, idcard, outdir));
 });
 */
-
+/*
 let net = new HttpNetlink('10.136.6.99', 7010);
 try {
     let content = net.getHttp(`/hncjb/reports?method=htmlcontent&name=yljjs&aaz170=19668513&aaz159=1347208&aac001=1002266493&aaz157=1357262&aaa129=%E6%B9%98%E6%BD%AD%E5%B8%82%E9%9B%A8%E6%B9%96%E5%8C%BA&aae211=201901`);
@@ -119,3 +119,4 @@ try {
 } finally {
     if (net) net.close();
 }
+*/
