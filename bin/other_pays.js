@@ -6,10 +6,15 @@ const program = require('commander');
 
 const Session = require('../lib/session');
 const { 
-    OtherPaysRequest, OtherPaysResponse
+    OtherPaysRequest, OtherPaysResponse,
+    OtherPayListRequest, OtherPayListResponse,
+    OtherPayListDetailRequest, OtherPayListDetailResponse,
+    OtherPerPayListDetailRequest, OtherPerPayListDetailResponse
 } = require('../lib/service');
+const { appendToFileName } = require('../lib/util');
 
 const personListXlsx = `D:\\代发管理\\雨湖区城乡居民基本养老保险代发人员名单.xlsx`;
+const payListXlsx = `D:\\代发管理\\雨湖区城乡居民基本养老保险代发人员支付明细.xlsx`;
 
 program
     .version('0.0.1')
@@ -22,11 +27,19 @@ program
         exportPersonList(personListXlsx, type, yearMonth);
     });
 program
+    .command('payList')
+    .arguments('<业务类型> <支付年月>')
+    .description('代发支付明细导出')
+    .action((type, yearMonth) => {
+        exportPayList(payListXlsx, type, yearMonth);
+    });
+program
     .on('--help', () => {
         console.log(
             '\n说明\n'+
-            '  代发类型: 801 - 独生子女, 802 - 乡村教师, 803 - 乡村医生, 807 - 电影放映员' +
-            '  代发年月: 格式 YYYYMM, 如 201901'
+            '  代发类型: 801 - 独生子女, 802 - 乡村教师, 803 - 乡村医生, 807 - 电影放映员\n' +
+            '  业务类型: DF0001 - 独生子女, DF0002 - 乡村教师, DF0003 - 乡村医生, DF0007 - 电影放映员\n' +
+            '  代发年月|支付年月: 格式 YYYYMM, 如 201901'
         );
     });
 program
@@ -117,4 +130,95 @@ async function exportPersonList(personListXlsx, type, yearMonth) {
         saveName = personListXlsx + `(${OtherPaysResponse.getTypeName(type)})${date}`;
     }
     workbook.toFileAsync(saveName);
+}
+
+async function exportPayList(payListXlsx, type, yearMonth) {
+    const exportItems = [];
+    let totalSum = 0;
+    const typeChn = OtherPayListResponse.otherPayTypeChn(type);
+
+    Session.use('002', session => {
+        session.send(new OtherPayListRequest({
+            type, yearMonth
+        }));
+        const payList = new OtherPayListResponse(session.get());
+        payList.datas.forEach(data => {
+            if (data.typeChn) {
+                session.send(new OtherPayListDetailRequest(data.payList));
+                const payListDetail = new OtherPayListDetailResponse(session.get());
+                payListDetail.datas.forEach(detailData => {
+                    if (detailData.region && detailData.payFlag === '0') {
+                        session.send(new OtherPerPayListDetailRequest({
+                            id: detailData.id,
+                            payList: detailData.payList,
+                            perPayList: detailData.perPayList
+                        }));
+                        const perPayListDetail = new OtherPerPayListDetailResponse(session.get());
+                        let startYearMonth = 0;
+                        let endYearMonth = 0;
+                        const count = perPayListDetail.rowcount;
+                        if (count > 0) {
+                            startYearMonth = perPayListDetail.datas[0].yearMonth;
+                            if (count > 1) {
+                                endYearMonth = perPayListDetail.datas[count - 1].yearMonth;
+                            } else {
+                                endYearMonth = startYearMonth;
+                            }
+                        }
+                        totalSum += detailData.payAmount;
+                        exportItems.push({
+                            region: detailData.region,
+                            name: detailData.name,
+                            idcard: detailData.idcard,
+                            type: typeChn,
+                            yearMonth: detailData.yearMonth,
+                            startYearMonth,
+                            endYearMonth,
+                            payAmount: detailData.payAmount
+                        });
+                    }
+                });
+            }
+        });
+    });
+
+    exportItems.sort((a, b) => a.region.localeCompare(b.region, 'zh-Hans-CN', {sensitivity: 'accent'}));
+    
+    let workbook = await Xlsx.fromFileAsync(payListXlsx);
+    let sheet = workbook.sheet(0);
+
+    let date = dateFormat(new Date(), 'yyyymmdd');
+    let dateChn = dateFormat(new Date(), 'yyyy年m月d日');
+    let reportDate = `制表时间：${dateChn}`;
+
+    sheet.cell('G2').value(reportDate);
+
+    let [startRow, currentRow] = [4, 4];
+
+    for (const data of exportItems) {
+        let row;
+        if (currentRow > startRow)
+            row = sheet.insertAndCopyRow(currentRow, startRow, true);
+        else
+            row = sheet.row(currentRow);
+
+        row.cell('A').value(currentRow - startRow + 1);
+        row.cell('B').value(data.region);
+        row.cell('C').value(data.name);
+        row.cell('D').value(data.idcard);
+        row.cell('E').value(data.type);
+        row.cell('F').value(data.yearMonth);
+        row.cell('G').value(data.startYearMonth);
+        row.cell('H').value(data.endYearMonth);
+        row.cell('I').value(data.payAmount);
+
+        currentRow ++;
+    }
+    let row = sheet.insertAndCopyRow(currentRow, startRow);
+    row.cell('C').value('共计');
+    row.cell('D').value(currentRow - startRow);
+    row.cell('H').value('合计');
+    row.cell('I').value(totalSum);
+
+    workbook.toFileAsync(appendToFileName(payListXlsx, `(${typeChn})${date}`));
 }
