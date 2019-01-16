@@ -31,6 +31,10 @@ program
     .arguments('<业务类型> <支付年月>')
     .description('代发支付明细导出')
     .action((type, yearMonth) => {
+        if (Intl.Collator.supportedLocalesOf('zh').length === 0) {
+            console.error(`Use 'node --icu-data-dir=node_modules/full-icu <this-script>' to support chinese ordering`);
+            process.exit(-1);
+        }
         exportPayList(payListXlsx, type, yearMonth);
     });
 program
@@ -182,7 +186,7 @@ async function exportPayList(payListXlsx, type, yearMonth) {
         });
     });
 
-    exportItems.sort((a, b) => a.region.localeCompare(b.region, 'zh-Hans-CN', {sensitivity: 'accent'}));
+    exportItems.sort((a, b) => a.region.localeCompare(b.region, 'zh'));
     
     let workbook = await Xlsx.fromFileAsync(payListXlsx);
     let sheet = workbook.sheet(0);
