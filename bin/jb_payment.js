@@ -22,8 +22,16 @@ program
     .description('财务支付单生成程序')
     .arguments('<发放年月> [业务状态]')
     .action((yearMonth, state) => {
-        jbPayment(yearMonth, state);
+        jbPayment(yearMonth, state ? state : '0');
     });
+
+program.on('--help', () => {
+    console.log(
+        '\n说明\n'+
+        '  发放年月: 格式 YYYYMM, 如 201901\n' +
+        '  业务状态：0 - 未支付(默认), 1 - 已支付'
+    );
+});
 
 program.parse(process.argv);
 
