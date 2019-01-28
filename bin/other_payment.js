@@ -186,7 +186,11 @@ async function exportPayList(payListXlsx, type, yearMonth) {
         });
     });
 
-    exportItems.sort((a, b) => a.region.localeCompare(b.region, 'zh'));
+    exportItems.sort((a, b) => {
+        let r = a.region.localeCompare(b.region, 'zh');
+        if (r === 0) r = a.name.localeCompare(b.name, 'zh');
+        return r;
+    });
     
     let workbook = await Xlsx.fromFileAsync(payListXlsx);
     let sheet = workbook.sheet(0);
