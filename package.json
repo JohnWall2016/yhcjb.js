@@ -14,7 +14,9 @@
     "dateformat": "^3.0.3",
     "full-icu": "^1.2.1",
     "lodash": "^4.17.10",
+    "mysql2": "^1.6.4",
     "netlinkwrapper": "file://../netlinkwrapper",
+    "sequelize": "^4.42.0",
     "xlsx-populate": "file://../xlsx-populate"
   },
   "devDependencies": {
