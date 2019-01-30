@@ -113,12 +113,12 @@ describe('sequelize test', function() {
                 G: 'S'
             }
         }).then(async () => {
-            await db.close();
             it.log('导入成功');
+            await db.close();
             done();
         }, async err => {
-            await db.close();
             it.log(err);
+            await db.close();
             done(err);
         });
     });
