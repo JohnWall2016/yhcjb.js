@@ -17,6 +17,7 @@
     "mysql2": "^1.6.4",
     "netlinkwrapper": "file://../netlinkwrapper",
     "sequelize": "^4.42.0",
+    "tmp": "^0.0.33",
     "xlsx-populate": "file://../xlsx-populate"
   },
   "devDependencies": {

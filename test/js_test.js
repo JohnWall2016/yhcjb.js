@@ -19,5 +19,16 @@ describe('js test', function() {
         const john = new Person('John');
         it.log(john.whoAmI());
         it.log(john.greeting());
-    })
+    });
+
+    it.only('test tmp file', function() {
+        const fs = require('fs');
+        const tmp = require('tmp');
+        const tmpFile = tmp.fileSync({
+            keep: true
+        });
+        it.log(`${tmpFile.name}`);
+        fs.writeSync(tmpFile.fd, 'abcd\nefgh\n');
+        fs.closeSync(tmpFile.fd);
+    });
 });
