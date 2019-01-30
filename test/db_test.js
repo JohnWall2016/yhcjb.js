@@ -1,12 +1,12 @@
 'use strict';
 
 const { it } = require('./logtest');
-const Sequelize = require('sequelize');
+const { Database } = require('../lib/db');
 
 describe('sequelize test', function() {
 
     function createFpDb() {
-        return new Sequelize({
+        return new Database({
             dialect:  'mysql',
             host:     'localhost',
             port:     3306,
@@ -21,39 +21,39 @@ describe('sequelize test', function() {
     }
 
     /**
-     * @param { Sequelize.Sequelize } db 
+     * @param { Database } db 
      */
     function defineFpTable(db) {
         return db.define('扶贫数据台账20190128', {
             no: {
-                type:  Sequelize.INTEGER,
                 field: '序号',
+                type:  Database.INTEGER,
                 primaryKey: true
             },
             district: {
-                type:  Sequelize.STRING,
-                field: '区划'
+                field: '区划',
+                type:  Database.STRING
             },
             area: {
-                type:  Sequelize.STRING,
-                field: '区域'
+                field: '区域',
+                type:  Database.STRING
             },
             address: {
-                type:  Sequelize.STRING,
-                field: '地址'
+                field: '地址',
+                type:  Database.STRING
             },
             name: {
-                type:  Sequelize.STRING,
-                field: '姓名'
+                field: '姓名',
+                type:  Database.STRING
             },
             idcard: {
-                type:  Sequelize.STRING,
                 field: '身份证号码',
+                type:  Database.STRING,
                 //primaryKey: true
             },
             type: {
-                type:  Sequelize.STRING,
-                field: '人员类型'
+                field: '人员类型',
+                type:  Database.STRING
             }
         }, { 
             freezeTableName: true,
@@ -97,19 +97,7 @@ describe('sequelize test', function() {
     });
 
     it.only('load from xlsx', function(done) {
-        const { Sequelize } = require('../lib/db');
-        const db = new Sequelize({
-            dialect:  'mysql',
-            host:     'localhost',
-            port:     3306,
-            database: 'jzfp',
-            username: 'root',
-            password: 'root',
-            define:   {
-                charset: 'utf8'
-            },
-            operatorsAliases: false
-        });
+        const db = createFpDb();
         db.loadXlsx({
             tableName: '扶贫数据台账20190128',
             xlsx: 'D:\\精准扶贫\\20190128扶贫数据台账（不含残疾类人员）.xlsx',
