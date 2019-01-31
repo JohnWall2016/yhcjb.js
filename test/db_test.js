@@ -28,7 +28,7 @@ describe('sequelize test', function() {
             no: {
                 field: '序号',
                 type:  Database.INTEGER,
-                primaryKey: true
+                //primaryKey: true
             },
             district: {
                 field: '区划',
@@ -49,7 +49,11 @@ describe('sequelize test', function() {
             idcard: {
                 field: '身份证号码',
                 type:  Database.STRING,
-                //primaryKey: true
+                primaryKey: true
+            },
+            birthDay: {
+                field: '出生日期',
+                type:  Database.INTEGER,
             },
             type: {
                 field: '人员类型',
@@ -102,7 +106,7 @@ describe('sequelize test', function() {
             tableName: '扶贫数据台账20190128',
             xlsx: 'D:\\精准扶贫\\20190128扶贫数据台账（不含残疾类人员）.xlsx',
             startRow: 2,
-            endRow: 19232,
+            endRow: 19231,
             mappings: {
                 A: 'N',
                 B: 'S',
@@ -110,7 +114,8 @@ describe('sequelize test', function() {
                 D: 'S',
                 E: 'S',
                 F: 'S',
-                G: 'S'
+                G: 'N',
+                H: 'S'
             }
         }).then(() => {
             db.close();

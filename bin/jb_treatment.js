@@ -34,6 +34,7 @@ const payInfoXslx = `${rootDir}\\养老金计算表模板.xlsx`;
 program
     .version('0.0.1')
     .description('信息核对报告表和养老金计算表生成程序')
+
 program
     .command('download')
     .arguments('<年月>')
@@ -45,6 +46,7 @@ program
         const saveXlsx = `${rootDir}\\信息核对报告表模板${yearMonth}.xlsx`;
         downloadPaylist(infoXlsx, saveXlsx);
     })
+
 program
     .command('split')
     .arguments('<年月> <开始行> <结束行>')
@@ -62,6 +64,7 @@ program
             stop('split 命令后应跟 开始 结束 行号');
         }
     })
+    
 program.on('--help', () => {
     console.log(
         '\n说明\n'+
