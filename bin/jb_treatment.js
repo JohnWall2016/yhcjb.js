@@ -8,10 +8,12 @@ const Xlsx = require('xlsx-populate');
 const program = require('commander');
 
 const Session = require('../lib/session');
-const { 
+const {
+    DyhdInfoRequest, DyhdInfoResponse,
     DyshInfoRequest, DyshInfoResponse, 
     BankAccountInfoRequest, BankAccountInfoResponse  
 } = require('../lib/service');
+const { Database } = require('../lib/db');
 
 function stop(msg, code = -1) {
     console.error(msg);
@@ -19,7 +21,7 @@ function stop(msg, code = -1) {
 }
 
 function getYearMonth(yearMonth) {
-    let m
+    let m;
     if (m = yearMonth.match(/^(\d\d\d\d)(\d\d)$/)) {
         return [m[1], `${m[2][0]=='0'?m[2].substr(1):m[2]}`];
     } else {
@@ -30,10 +32,27 @@ function getYearMonth(yearMonth) {
 const rootDir = 'D:\\待遇核定';
 const infoXlsx = `${rootDir}\\信息核对报告表模板.xlsx`;
 const payInfoXslx = `${rootDir}\\养老金计算表模板.xlsx`;
+const fphdXlsx = `${rootDir}\\到龄贫困人员待遇核定情况表模板.xlsx`;
 
 program
     .version('0.0.1')
     .description('信息核对报告表和养老金计算表生成程序')
+
+program
+    .command('fphd')
+    .arguments('<年-月-日>')
+    .description('从业务系统下载生成到龄贫困人员待遇核定情况表')
+    .action(date => {
+        let ma, dt;
+        if (ma = date.match(/^(\d\d\d\d)-(\d\d)-(\d\d)$/)) {
+            const [, y, m, d] = ma;
+            dt = `${y}${m}${d}`;
+        } else {
+            stop('日期格式有误');
+        }
+        const saveXlsx = `${rootDir}\\到龄贫困人员待遇核定情况表模板${dt}.xlsx`;
+        downloadFpdyhdList(fphdXlsx, saveXlsx, date);
+    })
 
 program
     .command('download')
@@ -305,6 +324,143 @@ async function splitPaylist(infoXlsx, saveXlsx, payInfoXslx, outputDir, start, e
                     getPaymentReport(name, idcard, path.join(outputDir, xzj, csq));
                 });
             }
+        }
+    });
+}
+
+function createFpDb() {
+    return new Database({
+        dialect:  'mysql',
+        host:     'localhost',
+        port:     3306,
+        database: 'jzfp',
+        username: 'root',
+        password: 'root',
+        define:   {
+            charset: 'utf8'
+        },
+        logging: false,
+        operatorsAliases: false
+    });
+}
+
+/**
+ * @param { Database } db 
+ */
+function defineFpTable(db) {
+    return db.define('扶贫数据台账20190128', {
+        no: {
+            field: '序号',
+            type:  Database.INTEGER,
+            //primaryKey: true
+        },
+        district: {
+            field: '区划',
+            type:  Database.STRING
+        },
+        area: {
+            field: '区域',
+            type:  Database.STRING
+        },
+        address: {
+            field: '地址',
+            type:  Database.STRING
+        },
+        name: {
+            field: '姓名',
+            type:  Database.STRING
+        },
+        idcard: {
+            field: '身份证号码',
+            type:  Database.STRING,
+            primaryKey: true
+        },
+        birthDay: {
+            field: '出生日期',
+            type:  Database.INTEGER,
+        },
+        type: {
+            field: '人员类型',
+            type:  Database.STRING
+        }
+    }, { 
+        freezeTableName: true,
+        createdAt: false,
+        updatedAt: false
+    });
+}
+
+async function downloadFpdyhdList(fphdXlsx, saveXlsx, dlny) {
+    const workbook = await Xlsx.fromFileAsync(fphdXlsx);
+    const sheet = workbook.sheet(0);
+    let [startRow, currentRow] = [4, 4];
+
+    const result = [];
+    Session.use('002', session => {
+        session.send(new DyhdInfoRequest(dlny));
+        const info = new DyhdInfoResponse(session.get());
+        if (info.datas.length > 0) {
+            const db = createFpDb();
+            const fpTable = defineFpTable(db);
+            fpTable.sync().then(async () => {
+                for (const data of info.datas) {
+                    const idcard = data.idcard;
+                    const p = await fpTable.findOne({ where: { idcard } });
+                    const yjnx = data.yjnx;
+                    const sjnx = data.sjnx;
+                    let qjns = data.yjnx - data.sjnx;
+                    if (qjns < 0) qjns = 0;
+                    let bz = data.bz;
+                    if (!bz) bz = '';
+                    if (p) {
+                        result.push({
+                            xzqh: data.xzqh,
+                            name: data.name,
+                            idcard: data.idcard,
+                            birthDay: data.birthDay,
+                            sex: data.sex,
+                            hjxz: data.hjxz,
+                            fpName: p.name,
+                            fpType: p.type,
+                            jbzt: data.state,
+                            dyny: data.lqny,
+                            yjnx, sjnx, qjns,
+                            qbcb: data.qbzt,
+                            bz
+                        });
+                    }
+                }
+                await db.close();
+                for (const p of result) {
+                    let row;
+                    if (currentRow > startRow)
+                        row = sheet.insertAndCopyRow(currentRow, startRow, true);
+                    else
+                        row = sheet.row(currentRow);
+
+                    console.log(`${currentRow-startRow+1} ${p.idcard} ${p.name}`);
+
+                    row.cell('A').value(currentRow-startRow+1);
+                    row.cell('B').value(p.xzqh);
+                    row.cell('C').value(p.name);
+                    row.cell('D').value(p.idcard);
+                    row.cell('E').value(p.birthDay);
+                    row.cell('F').value(p.sex);
+                    row.cell('G').value(p.hjxz);
+                    row.cell('H').value(p.fpName);
+                    row.cell('I').value(p.fpType);
+                    row.cell('J').value(p.jbzt);
+                    row.cell('K').value(p.dyny);
+                    row.cell('L').value(p.yjnx);
+                    row.cell('M').value(p.sjnx);
+                    row.cell('N').value(p.qjns);
+                    row.cell('O').value(p.qbcb);
+                    row.cell('P').value(p.bz);
+
+                    currentRow ++;
+                }
+                workbook.toFileAsync(saveXlsx);
+            });
         }
     });
 }
