@@ -92,45 +92,73 @@ program.on('--help', () => {
 })
 program.parse(process.argv);
 
-function downloadPaylist(infoXlsx, saveXlsx) {
-    Xlsx.fromFileAsync(infoXlsx).then(workbook => {
-        let sheet = workbook.sheet(0);
-        let [startRow, currentRow] = [4, 4];
-
-        Session.use('002', session => {
-            session.send(new DyshInfoRequest({
-                shzt: '0',
-                options: {
-                    pagesize: 500,
-                    sorting: [{"dataKey":"aaa027","sortDirection":"ascending"}]
-                }
-            }));
-            let dyshInfo = new DyshInfoResponse(session.get());
-            dyshInfo.datas.forEach((data, index) => {
-                let row;
-                if (currentRow > startRow)
-                    row = sheet.insertAndCopyRow(currentRow, startRow, true);
-                else
-                    row = sheet.row(currentRow);
-
-                console.log(`${index+1} ${data.idcard} ${data.name}`);
-
-                row.cell('A').value(index + 1);
-                row.cell('B').value(data.name);
-                row.cell('C').value(data.idcard);
-                row.cell('D').value(data.xzqh);
-                row.cell('E').value(data.payAmount);
-                row.cell('F').value(data.payMonth);
-                row.cell('G').value('是 [ ]');
-                row.cell('H').value('否 [ ]');
-                row.cell('I').value('是 [ ]');
-                row.cell('J').value('否 [ ]');
-
-                currentRow ++;
-            });
-        });
-        workbook.toFileAsync(saveXlsx);
+async function downloadPaylist(infoXlsx, saveXlsx) {
+    let datas;
+    Session.use('002', session => {
+        session.send(new DyshInfoRequest({
+            shzt: '0',
+            options: {
+                pagesize: 500,
+                sorting: [{"dataKey":"aaa027","sortDirection":"ascending"}]
+            }
+        }));
+        let dyshInfo = new DyshInfoResponse(session.get());
+        datas = dyshInfo.datas;
     });
+
+    if (datas && datas.length > 0) {
+        const db = createFpDb();
+        const fpTable = defineFpTable(db);
+        await fpTable.sync();
+        for (const data of datas) {
+            const idcard = data.idcard;
+            const p = await fpTable.findOne({ where: { idcard } });
+            if (p) {
+                data.bz = '人社厅发〔2018〕111号';
+                data.fpName = p.name;
+                data.fpType = p.type;
+            } else {
+                data.bz = '';
+                data.fpName = '';
+                data.fpType = '';
+            }
+        }
+        await db.close();
+
+        const workbook = await Xlsx.fromFileAsync(infoXlsx);
+        const sheet = workbook.sheet(0);
+        let [startRow, currentRow] = [4, 4];
+        datas.forEach((data, index) => {
+            if (data.name === data.fpName)
+                console.log(`${index+1} ${data.idcard} ${data.name} ${data.bz} ${data.fpType}`);
+            else
+                console.log(`${index+1} ${data.idcard} ${data.name} ${data.bz} ${data.fpType} ${data.fpName}`);
+
+            let row;
+            if (currentRow > startRow)
+                row = sheet.insertAndCopyRow(currentRow, startRow, true);
+            else
+                row = sheet.row(currentRow);
+            row.cell('A').value(index + 1);
+            row.cell('B').value(data.name);
+            row.cell('C').value(data.idcard);
+            row.cell('D').value(data.xzqh);
+            row.cell('E').value(data.payAmount);
+            row.cell('F').value(data.payMonth);
+            row.cell('G').value('是 [ ]');
+            row.cell('H').value('否 [ ]');
+            row.cell('I').value('是 [ ]');
+            row.cell('J').value('否 [ ]');
+            
+            row.cell('L').value(data.bz);
+            row.cell('M').value(data.fpType);
+            row.cell('N').value(data.fpName);
+
+            currentRow ++;
+        });
+
+        await workbook.toFileAsync(saveXlsx);
+    }
 }
 
 const reXzhq = [
