@@ -114,7 +114,7 @@ async function downloadPaylist(infoXlsx, saveXlsx) {
             const idcard = data.idcard;
             const p = await fpTable.findOne({ where: { idcard } });
             if (p) {
-                data.bz = '人社厅发〔2018〕111号';
+                data.bz = '按人社厅发〔2018〕111号文办理';
                 data.fpName = p.name;
                 data.fpType = p.type;
             } else {
@@ -141,7 +141,7 @@ async function downloadPaylist(infoXlsx, saveXlsx) {
                 row = sheet.row(currentRow);
             row.cell('A').value(index + 1);
             row.cell('B').value(data.name);
-            row.cell('C').value(data.idcard);
+            row.cell('C').value(`${data.idcard}`);
             row.cell('D').value(data.xzqh);
             row.cell('E').value(data.payAmount);
             row.cell('F').value(data.payMonth);
@@ -234,7 +234,7 @@ async function splitPaylist(infoXlsx, saveXlsx, payInfoXslx, outputDir, start, e
 
                 outRow.cell('A').value(index + 1);
                 outRow.cell('B').value(row.cell('B').value());
-                outRow.cell('C').value(row.cell('C').value());
+                outRow.cell('C').value(`${row.cell('C').value()}`);
                 outRow.cell('D').value(row.cell('D').value());
                 outRow.cell('E').value(row.cell('E').value());
                 outRow.cell('F').value(row.cell('F').value());
@@ -252,14 +252,15 @@ async function splitPaylist(infoXlsx, saveXlsx, payInfoXslx, outputDir, start, e
     }
 
     // 按分组生成养老金养老金计算表
-    console.log('按分组生成养老金养老金计算表');
+    console.log('\n按分组生成养老金养老金计算表');
     Session.use('002', session => {
         function getPaymentReport(name, idcard, outdir, retry = 3) {
             session.send(new DyshInfoRequest({
                 idcard,
                 shzt: '0'
             }));
-            let dyshInfo = new DyshInfoResponse(session.get());
+            let result = session.get();
+            let dyshInfo = new DyshInfoResponse(result);
             if (dyshInfo.datas && dyshInfo.datas[0]) {
                 session.send(new BankAccountInfoRequest(idcard));
                 let bankAccountInfo = new BankAccountInfoResponse(session.get());
@@ -333,11 +334,11 @@ async function splitPaylist(infoXlsx, saveXlsx, payInfoXslx, outputDir, start, e
 
                     workbook.toFileAsync(path.join(outdir, `${name}[${idcard}]养老金计算表.xlsx`));
                 }).catch(err => {
-                    console.error(`${idcard} ${name} 获得养老金计算信息岀错: ${err}`);
+                    console.error(`  ${idcard} ${name} 获得养老金计算信息岀错: ${err}`);
                     console.error(err);
                 });
             } else {
-                console.error(`${idcard} ${name} 未查到该人员核定数据`);
+                console.error(`  ${idcard} ${name} 未查到该人员核定数据: ${result}`);
             }
         }
 
@@ -347,9 +348,8 @@ async function splitPaylist(infoXlsx, saveXlsx, payInfoXslx, outputDir, start, e
                     let row = sheet.row(index);
                     let name = row.cell('B').value();
                     let idcard = row.cell('C').value();
-
                     console.log(`  ${idcard} ${name}`);
-                    getPaymentReport(name, idcard, path.join(outputDir, xzj, csq));
+                    getPaymentReport(name, `${idcard}`, path.join(outputDir, xzj, csq));
                 });
             }
         }
