@@ -31,4 +31,26 @@ describe('js test', function() {
         fs.writeSync(tmpFile.fd, 'abcd\nefgh\n');
         fs.closeSync(tmpFile.fd);
     });
+
+    it.only('test destructuring', function() {
+        class Response {
+            constructor(data) {
+                Object.assign(this, data);
+                this.decode();
+            }
+            decode() {
+                ({ r1: this.name, r2: this.idcard } = this);
+            }
+        }
+        class Message extends Response {
+            decode() {
+                super.decode();
+                ({ r3: this.message } = this);
+            }
+        }
+        const res = new Response({r1:'jw',r2:'123123123'});
+        it.log(res);
+        const msg = new Message({r1:'jw',r2:'123123123',r3:'hello'});
+        it.log(msg);
+    });
 });
