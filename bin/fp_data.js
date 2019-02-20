@@ -115,7 +115,6 @@ async function* fetchCsdbData({ date, xlsx, beginRow, endRow, complain }) {
     const workbook = await Xlsx.fromFileAsync(xlsx);
     const sheet = workbook.sheet(0);
 
-    let count = 1;
     const colNameIdcards = [['H','I'],['J','K'],['L','M'],['N','O'],['P','Q']]
     for (let index = beginRow; index <= endRow; index ++) {
         const row = sheet.row(index);
@@ -138,7 +137,7 @@ async function* fetchCsdbData({ date, xlsx, beginRow, endRow, complain }) {
                     if (idcard.length == 18) {
                         const birthDay = idcard.substr(6, 8);
                         let data = {
-                            index: count++,
+                            index,
                             idcard,
                             name,
                             detail: {
@@ -148,10 +147,10 @@ async function* fetchCsdbData({ date, xlsx, beginRow, endRow, complain }) {
                             complain
                         }
                         if (type == '全额救助') {
-                            data.detail.qedb = '是';
+                            data.detail.qedb = '城市';
                             data.detail.qedb_date = date;
                         } else if (type == '差额救助') {
-                            data.detail.cedb = '是';
+                            data.detail.cedb = '城市';
                             data.detail.cedb_date = date;
                         }
                         yield data;
@@ -165,6 +164,58 @@ async function* fetchCsdbData({ date, xlsx, beginRow, endRow, complain }) {
 }
 
 module.exports.fetchCsdbData = fetchCsdbData;
+
+async function* fetchNcdbData({ date, xlsx, beginRow, endRow, complain }) {
+    const workbook = await Xlsx.fromFileAsync(xlsx);
+    const sheet = workbook.sheet(0);
+
+    const colNameIdcards = [['H','I'],['J','K'],['L','M'],['N','O'],['P','Q'],['R','S'],['T','U']]
+    for (let index = beginRow; index <= endRow; index ++) {
+        const row = sheet.row(index);
+        if (row) {
+            const xzj = row.cell('A').value(),
+                csq = row.cell('B').value(),
+                address = row.cell('D').value();
+
+            let type = row.cell('F').value();
+            if (type != '全额' && type != '差额') {
+                log.error(`农村低保类型有误:${index}行 ${type}`);
+                continue;
+            }
+
+            for (const [colName, colIdcard] of colNameIdcards) {
+                const name = row.cell(colName).value();
+                let idcard = String(row.cell(colIdcard).value());
+                if (name && idcard) {
+                    idcard = idcard.trim().toUpperCase();
+                    if (idcard.length == 18) {
+                        const birthDay = idcard.substr(6, 8);
+                        let data = {
+                            index,
+                            idcard,
+                            name,
+                            detail: {
+                                name, idcard, birthDay,
+                                xzj, csq, address
+                            },
+                            complain
+                        }
+                        if (type == '全额') {
+                            data.detail.qedb = '农村';
+                            data.detail.qedb_date = date;
+                        } else if (type == '差额') {
+                            data.detail.cedb = '农村';
+                            data.detail.cedb_date = date;
+                        }
+                        yield data;
+                    } else {
+                        log.error(`农村低保身份证号码有误:${index}行 ${idcard}`);
+                    }
+                }
+            }
+        }
+    }
+}
 
 /*
 mergeFpData(
@@ -196,16 +247,31 @@ mergeFpData(
     }
 );
 */
+/*
 mergeFpData(
     fetchCsdbData({
         date:     '201902',
         xlsx:     'D:\\精准扶贫\\201902\\2019年2月城市名册.xlsx',
-        beginRow: 101,
+        beginRow: 2,
         endRow:   6531,
         complain: true
     }),
     {
         recreate: false,
         type: '城市低保'
+    }
+);
+*/
+mergeFpData(
+    fetchNcdbData({
+        date:     '201902',
+        xlsx:     'D:\\精准扶贫\\201902\\2019年2月雨湖区农村低保名册.xlsx',
+        beginRow: 2,
+        endRow:   2232,
+        complain: true
+    }),
+    {
+        recreate: false,
+        type: '农村低保'
     }
 );
