@@ -48,7 +48,7 @@ async function mergeFpData(data, { recreate = false, type } = {}) {
     await db.close();
 }
 
-async function* fetchFpData({ date, xlsx, beginRow, endRow, complain }) {
+async function* fetchPkData({ date, xlsx, beginRow, endRow, complain }) {
     const workbook = await Xlsx.fromFileAsync(xlsx);
     const sheet = workbook.sheet(0);
 
@@ -217,61 +217,69 @@ async function* fetchNcdbData({ date, xlsx, beginRow, endRow, complain }) {
     }
 }
 
-/*
-mergeFpData(
-    fetchFpData({
-        date:     '201902',
-        xlsx:     'D:\\精准扶贫\\201902\\7372人贫困人口台账.xlsx',
-        beginRow: 2,
-        endRow:   7373,
-        complain: true
-    }),
-    {
-        recreate: true,
-        type: '贫困人口'
-    }
-);
-*/
-/*
-mergeFpData(
-    fetchTkData({
-        date:     '201902',
-        xlsx:     'D:\\精准扶贫\\201902\\城乡特困201902.xlsx',
-        beginRow: 2,
-        endRow: 949,
-        complain: true
-    }),
-    {
-        recreate: false,
-        type: '特困人员'
-    }
-);
-*/
-/*
-mergeFpData(
-    fetchCsdbData({
-        date:     '201902',
-        xlsx:     'D:\\精准扶贫\\201902\\2019年2月城市名册.xlsx',
-        beginRow: 2,
-        endRow:   6531,
-        complain: true
-    }),
-    {
-        recreate: false,
-        type: '城市低保'
-    }
-);
-*/
-mergeFpData(
-    fetchNcdbData({
-        date:     '201902',
-        xlsx:     'D:\\精准扶贫\\201902\\2019年2月雨湖区农村低保名册.xlsx',
-        beginRow: 2,
-        endRow:   2232,
-        complain: true
-    }),
-    {
-        recreate: false,
-        type: '农村低保'
-    }
-);
+function mergeData({ type, fetchFunc, date, xlsx, beginRow, endRow,
+    complain = false, recreate = false }) {
+    mergeFpData(
+        fetchFunc({
+            date, xlsx,
+            beginRow: Number(beginRow),
+            endRow:   Number(endRow),
+            complain
+        }),
+        { recreate, type }
+    );
+}
+
+const program = require('commander');
+
+program
+    .version('0.0.1')
+    .description('扶贫数据导库程序');
+
+// pkrk 201902 D:\精准扶贫\201902\7372人贫困人口台账.xlsx 2 7373
+program
+    .command('pkrk')
+    .arguments('<date> <xlsx> <beginRow> <endRow>')
+    .description('合并贫困人口数据')
+    .action((date, xlsx, beginRow, endRow) => {
+        mergeData({
+            type: '贫困人口', fetchFunc: fetchPkData,
+            date, xlsx, beginRow, endRow
+        });
+    });
+
+// tkry 201902 D:\精准扶贫\201902\城乡特困201902.xlsx 2 949
+program
+    .command('tkry')
+    .arguments('<date> <xlsx> <beginRow> <endRow>')
+    .description('合并特困人员数据')
+    .action((date, xlsx, beginRow, endRow) => {
+        mergeData({
+            type: '特困人员', fetchFunc: fetchTkData,
+            date, xlsx, beginRow, endRow
+        });
+    });
+
+// csdb 201902 D:\精准扶贫\201902\2019年2月城市名册.xlsx 2 6531
+program
+    .command('csdb')
+    .arguments('<date> <xlsx> <beginRow> <endRow>')
+    .description('合并城市低保数据')
+    .action((date, xlsx, beginRow, endRow) => {
+        mergeData({
+            type: '城市低保', fetchFunc: fetchCsdbData,
+            date, xlsx, beginRow, endRow
+        });
+    });
+
+// ncdb 201902 D:\精准扶贫\201902\2019年2月雨湖区农村低保名册.xlsx 2 2232
+program
+    .command('ncdb')
+    .arguments('<date> <xlsx> <beginRow> <endRow>')
+    .description('合并农村低保数据')
+    .action((date, xlsx, beginRow, endRow) => {
+        mergeData({
+            type: '农村低保', fetchFunc: fetchNcdbData,
+            date, xlsx, beginRow, endRow
+        });
+    });
