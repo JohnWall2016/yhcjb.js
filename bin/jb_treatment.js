@@ -50,7 +50,7 @@ program
         } else {
             stop('日期格式有误');
         }
-        const saveXlsx = `${rootDir}\\到龄贫困人员待遇核定情况表模板${dt}.xlsx`;
+        const saveXlsx = `${rootDir}\\到龄贫困人员待遇核定情况表${dt}.xlsx`;
         downloadFpdyhdList(fphdXlsx, saveXlsx, date);
     })
 
@@ -62,7 +62,7 @@ program
     )
     .action((yearMonth) => {
         getYearMonth(yearMonth);
-        const saveXlsx = `${rootDir}\\信息核对报告表模板${yearMonth}.xlsx`;
+        const saveXlsx = `${rootDir}\\信息核对报告表${yearMonth}.xlsx`;
         downloadPaylist(infoXlsx, saveXlsx);
     })
 
@@ -74,9 +74,8 @@ program
     )
     .action((yearMonth, start, end) => {
         const [year, month] = getYearMonth(yearMonth);
-        if ((start = parseInt(process.argv[4])) &&
-            (end = parseInt(process.argv[5]))) {
-            const saveXlsx = `${rootDir}\\信息核对报告表模板${yearMonth}.xlsx`;
+        if (start && end) {
+            const saveXlsx = `${rootDir}\\信息核对报告表${yearMonth}.xlsx`;
             const outputDir = `${rootDir}\\${year}年${month}月待遇核定数据`;
             splitPaylist(infoXlsx, saveXlsx, payInfoXslx, outputDir, start, end);
         } else {
