@@ -1,8 +1,8 @@
 'use strict';
 
 const Xlsx = require('xlsx-populate');
-const { createFpDb, defineFpBook } = require('../lib/db');
-const { createLogger } = require('../lib/util');
+const { Database, createFpDb, defineFpBook } = require('../lib/db');
+const { createLogger, getFormattedDate } = require('../lib/util');
 
 const log = createLogger('扶贫数据导入');
 
@@ -124,6 +124,7 @@ async function* fetchCsdbData({ date, xlsx, beginRow, endRow, complain }) {
                 address = row.cell('D').value();
 
             let type = row.cell('F').value();
+            if (type) type = type.trim();
             if (type != '全额救助' && type != '差额救助') {
                 log.error(`城市低保类型有误:${index}行 ${type}`);
                 continue;
@@ -178,6 +179,7 @@ async function* fetchNcdbData({ date, xlsx, beginRow, endRow, complain }) {
                 address = row.cell('D').value();
 
             let type = row.cell('F').value();
+            if (type) type = type.trim();
             if (type != '全额' && type != '差额') {
                 log.error(`农村低保类型有误:${index}行 ${type}`);
                 continue;
@@ -228,6 +230,123 @@ function mergeData({ type, fetchFunc, date, xlsx, beginRow, endRow,
         }),
         { recreate, type }
     );
+}
+
+const typeMap = {
+    pkrk: {
+        name: '贫困人口',
+        jbsf: '贫困人口一级'
+    },
+    tkry: {
+        name: '特困人员',
+        jbsf: '特困一级'
+    },
+    qedb: {
+        name: '全额低保人员',
+        jbsf: '低保对象一级'
+    },
+    yejc: {
+        name: '一二级残疾人员',
+        jbsf: '残一级'
+    },
+    cedb: {
+        name: '差额低保人员',
+        jbsf: '低保对象二级'
+    },
+    ssjc: {
+        name: '三四级残疾人员',
+        jbsf: '残二级'
+    }
+ }
+
+async function affirmIdentity(findOptions) {
+    const db = createFpDb();
+    const fpBook = defineFpBook(db);
+    await fpBook.sync({ force: false });
+
+    log.info('开始认定参保人员身份');
+
+    const data = await fpBook.findAll(findOptions);
+    let i = 1;
+    for (const d of data) {
+        let jbrdsf;
+        for (const type in typeMap) {
+            if (d[type]) {
+                jbrdsf = typeMap[type].jbsf;
+                //TODO: changed or newly inserted
+                break;
+            }
+        }
+        log.info(`${i++} ${d.idcard} ${d.name} ${jbrdsf}`);
+        await d.update({ jbrdsf });
+    }
+
+    log.info('结束认定参保人员身份');
+
+    await db.close();
+}
+
+const exportMap = ({
+    A: 'index',
+    B: 'no',
+    C: 'xzj',
+    D: 'csq',
+    E: 'address',
+    F: 'name',
+    G: 'idcard',
+    H: 'birthDay',
+    I: 'pkrk',
+    J: 'pkrk_date',
+    K: 'tkry',
+    L: 'tkry_date',
+    M: 'qedb',
+    N: 'qedb_date',
+    O: 'cedb',
+    P: 'cedb_date',
+    Q: 'yejc',
+    R: 'yejc_date',
+    S: 'ssjc',
+    T: 'ssjc_date',
+    U: 'jbrdsf',
+    V: 'jbcbqk'
+});
+
+async function exportData(tmplXlsx, saveXlsx, findOptions) {
+    const db = createFpDb();
+    const fpBook = defineFpBook(db);
+    await fpBook.sync({ force: false });
+
+    log.info('开始导出扶贫底册');
+
+    const data = await fpBook.findAll(findOptions);
+    const workbook = await Xlsx.fromFileAsync(tmplXlsx);
+    const sheet = workbook.sheet(0);
+    let [startRow, currentRow] = [3, 3];
+    for (const d of data) {
+        let row;
+        if (currentRow > startRow)
+            row = sheet.insertAndCopyRow(currentRow, startRow, false);
+        else
+            row = sheet.row(currentRow);
+
+        d.index = currentRow - startRow + 1;
+
+        log.info(`${d.index} ${d.idcard} ${d.name}`);
+
+        for (const key in exportMap) {
+            const value = exportMap[key];
+            const data = d[value];
+            if (data) row.cell(key).value(data);
+        }
+
+        currentRow ++;
+    }
+
+    await workbook.toFileAsync(saveXlsx);
+
+    log.info('结束导出扶贫底册');
+
+    await db.close();
 }
 
 const program = require('commander');
@@ -283,3 +402,49 @@ program
             date, xlsx, beginRow, endRow
         });
     });
+
+program
+    .command('rdsf')
+    .arguments('[idcards]')
+    .description('认定居保身份')
+    .action(() => {
+        const idcards = process.argv.slice(3);
+        let findOptions = {}
+        if (idcards.length > 0) {
+            const where = [];
+            for (const idcard of idcards) {
+                where.push({ idcard });
+            }
+            findOptions = {
+                where: {
+                  [Database.Op.or]: where
+                }
+            }
+        }
+        affirmIdentity(findOptions);
+    });
+
+program
+    .command('dcsj')
+    .arguments('[idcards]')
+    .description('导出扶贫底册数据')
+    .action(() => {
+        const idcards = process.argv.slice(3);
+        let findOptions = {}
+        if (idcards.length > 0) {
+            const where = [];
+            for (const idcard of idcards) {
+                where.push({ idcard });
+            }
+            findOptions = {
+                where: {
+                  [Database.Op.or]: where
+                }
+            }
+        }
+        const tmplXlsx = 'D:\\精准扶贫\\雨湖区精准扶贫底册模板.xlsx';
+        const saveXlsx = `D:\\精准扶贫\\雨湖区精准扶贫底册${getFormattedDate()}.xlsx`;
+        exportData(tmplXlsx, saveXlsx, findOptions);
+    });
+
+program.parse(process.argv);
