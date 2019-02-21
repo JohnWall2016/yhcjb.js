@@ -1,7 +1,7 @@
 'use strict';
 
 const Xlsx = require('xlsx-populate');
-const { Database, createFpDb, defineFpBook } = require('../lib/db');
+const { Database, createFpDb, defineFpBook, defineJbTable } = require('../lib/db');
 const { createLogger, getFormattedDate } = require('../lib/util');
 
 const log = createLogger('扶贫数据导入');
@@ -349,6 +349,75 @@ async function exportData(tmplXlsx, saveXlsx, findOptions) {
     await db.close();
 }
 
+async function importJbdata(xlsx, startRow, endRow, recreate) {
+    const db = createFpDb();
+    const jbTable = defineJbTable(db);
+
+    if (recreate) {
+        log.info('重新创建居保参保人员明细表');
+        await jbTable.sync({ force: true });
+    }
+    else {
+        await jbTable.sync({ force: false });
+    }
+
+    log.info('开始导入居保参保人员明细表');
+
+    await db.loadXlsx({
+        tableName: jbTable.name,
+        xlsx, startRow, endRow,
+        mappings: {
+            A: 'S', B: 'S', C: 'S', D: 'S',
+            E: 'S', F: 'S', H: 'S', J: 'S',
+            K: 'S', N: 'S'
+        }
+    });
+
+    log.info('结束导入居保参保人员明细表');
+
+    await db.close();
+}
+
+const jbztMap = [
+    [1, 3, '正常待遇'],[2, 3, '暂停待遇'],[4, 3, '终止参保'],
+    [1, 1, '正常缴费'],[2, 2, '暂停缴费']
+];
+
+async function updateJbzt() {
+    const db = createFpDb();
+
+    const fpBook = defineFpBook(db);
+    await fpBook.sync({ force: false });
+
+    const jbTable = defineJbTable(db);
+    await jbTable.sync({ force: false });
+
+    function getFieldName(field) {
+        let fld = this.rawAttributes[field];
+        if (fld) {
+            return `${fld.Model.name}.${fld.field}`;
+        }
+        return fld;
+    }
+
+    fpBook.f = getFieldName;
+    jbTable.f = getFieldName;
+
+    for (const [cbzt, jfzt, jbzt] of jbztMap) {
+        const sql = `
+update ${fpBook.name}, ${jbTable.name}
+   set ${fpBook.f('jbcbqk')} = '${jbzt}'
+ where ${fpBook.f('idcard')}=${jbTable.f('idcard')} and
+       ${jbTable.f('cbzt')}='${cbzt}' and ${jbTable.f('jfzt')}='${jfzt}'`;
+
+        log.info(sql);
+
+        await db.query(sql);
+    }
+
+    await db.close();
+}
+
 const program = require('commander');
 
 program
@@ -445,6 +514,21 @@ program
         const tmplXlsx = 'D:\\精准扶贫\\雨湖区精准扶贫底册模板.xlsx';
         const saveXlsx = `D:\\精准扶贫\\雨湖区精准扶贫底册${getFormattedDate()}.xlsx`;
         exportData(tmplXlsx, saveXlsx, findOptions);
+    });
+
+program
+    .command('drjb')
+    .arguments('<xlsx> <beginRow> <endRow> [\'recreate\']')
+    .description('导入居保参保人员明细表')
+    .action((xlsx, beginRow, endRow, recreate) => {
+        importJbdata(xlsx, beginRow, endRow, recreate === 'recreate');
+    });
+
+program
+    .command('jbzt')
+    .description('更新居保参保状态')
+    .action(() => {
+        updateJbzt();
     });
 
 program.parse(process.argv);

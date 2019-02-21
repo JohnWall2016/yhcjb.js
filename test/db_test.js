@@ -1,7 +1,7 @@
 'use strict';
 
 const { it } = require('./logtest');
-const { Database } = require('../lib/db');
+const { Database, createFpDb, defineFpBook } = require('../lib/db');
 
 describe('sequelize test', function() {
 
@@ -66,7 +66,7 @@ describe('sequelize test', function() {
         });
     }
 
-    it.only('create jzfp table', function(done) {
+    it('create jzfp table', function(done) {
         const db = createFpDb();
         const fpTable = defineFpTable(db);        
         fpTable.sync({ force: true }).then(
@@ -100,7 +100,7 @@ describe('sequelize test', function() {
         });
     });
 
-    it.only('load from xlsx', function(done) {
+    it('load from xlsx', function(done) {
         const db = createFpDb();
         db.loadXlsx({
             tableName: '扶贫数据台账20190128',
@@ -126,6 +126,28 @@ describe('sequelize test', function() {
             await db.close();
             done(err);
         });
+    });
+
+    it.only('get fpBook schema', async function(){
+        const db = createFpDb();
+        const fpBook = defineFpBook(db);
+
+        await fpBook.sync();
+
+        function getFieldName(field) {
+            let fld = this.rawAttributes[field];
+            if (fld) {
+                return `${fld.Model.name}.${fld.field}`;
+            }
+            return fld;
+        }
+
+        fpBook.f = getFieldName;
+
+        it.log(fpBook.f('jbrdsf'));
+        
+
+        await db.close();
     });
 
 });
