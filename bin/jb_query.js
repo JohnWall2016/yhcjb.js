@@ -43,13 +43,13 @@ queryToFile({
 });
 */
 
-async function updateInheritanceTable({ xlsx, startRow, endRow }) {
+async function updateInheritanceTable({ xlsx, beginRow, endRow }) {
     
     const workbook = await Xlsx.fromFileAsync(xlsx);
     const sheet = workbook.sheet(0);
 
     Session.use('002', session => {
-        for (let index = startRow; index < endRow; index++) {
+        for (let index = beginRow; index < endRow; index++) {
             const row = sheet.row(index);
             const idcard = row.cell('B').value();
 
@@ -57,9 +57,11 @@ async function updateInheritanceTable({ xlsx, startRow, endRow }) {
             let response = new GrinfoResponse(session.get());
             if (response.datas.length <= 0) continue;
             let info = response.datas[0];
+            if (!info || !info.idcard) continue;
 
-            console.log(`${info.xzqh}|${info.dwmc}|${info.state}`);
-            row.cell('E').value(info.xzqh);
+            console.log(`${info.czmc}|${info.dwmc}|${info.state}`);
+            row.cell('C').value(info.name);
+            row.cell('E').value(info.czmc);
             row.cell('F').value(info.dwmc);
             row.cell('G').value(info.state);
 
@@ -75,7 +77,7 @@ async function updateInheritanceTable({ xlsx, startRow, endRow }) {
                 row.cell('I').value(pauseTime);
                 try {
                     let delta = substractMonth(deathTime, previousMonth(pauseTime));
-                    console.log(`${deathTime} - ${pauseTime} + 1 = ${delta}`);
+                    console.log(`${deathTime} - ${pauseTime} + 1 = ${delta}|${previousMonth(pauseTime)}`);
                     row.cell('J').value(delta);
                 } catch (err) {
                     console.log(`无法计算时间差, ${deathTime} - ${pauseTime}: ${err}`);
@@ -91,8 +93,8 @@ async function updateInheritanceTable({ xlsx, startRow, endRow }) {
                 let sdTime = padZeroStr(info.deathTime, 8);
                 row.cell('M').value(sdTime);
                 try {
-                    let delta = substractMonth(deathTime, previousMonth(sdTime.substr(0, 6)));
-                    console.log(`${deathTime} - ${sdTime} + 1 = ${delta}`);
+                    let delta = substractMonth(deathTime, sdTime.substr(0, 6));
+                    console.log(`${deathTime} - ${sdTime} = ${delta}`);
                     row.cell('N').value(delta);
                 } catch (err) {
                     console.log(`无法计算时间差, ${deathTime} - ${sdTime}: ${err}`);
@@ -103,3 +105,20 @@ async function updateInheritanceTable({ xlsx, startRow, endRow }) {
     workbook.toFileAsync(appendToFileName(xlsx, '.new'));
 }
 
+const program = require('commander');
+
+program
+    .version('0.0.1')
+    .description('居保信息查询更新表格程序');
+
+program
+    .command('swjc')
+    .arguments('<xlsx> <beginRow> <endRow>')
+    .description('死亡继承表格更新程序')
+    .action((xlsx, beginRow, endRow) => {
+        updateInheritanceTable({
+            xlsx, beginRow, endRow
+        })
+    });
+
+program.parse(process.argv);
