@@ -49,7 +49,7 @@ async function updateInheritanceTable({ xlsx, beginRow, endRow }) {
     const sheet = workbook.sheet(0);
 
     Session.use('002', session => {
-        for (let index = beginRow; index < endRow; index++) {
+        for (let index = beginRow; index <= endRow; index++) {
             const row = sheet.row(index);
             const idcard = row.cell('B').value();
 
