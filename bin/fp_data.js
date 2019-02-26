@@ -219,6 +219,54 @@ async function* fetchNcdbData({ date, xlsx, beginRow, endRow, complain }) {
     }
 }
 
+async function* fetchCjData({ date, xlsx, beginRow, endRow, complain }) {
+    const workbook = await Xlsx.fromFileAsync(xlsx);
+    const sheet = workbook.sheet(0);
+
+    for (let index = beginRow; index <= endRow; index ++) {
+        const row = sheet.row(index);
+        if (row) {
+            const name = row.cell('A').value(),
+                idcard = String(row.cell('B').value()).substr(0, 18),
+                birthDay = idcard.substr(6, 8),
+                xzj = row.cell('G').value(),
+                address = row.cell('F').value(),
+                level = row.cell('D').value().trim();
+
+            const detail = {
+                idcard, name, birthDay,
+                xzj, address,
+            }
+
+            switch (level) {
+                case '一级':
+                case '二级':
+                    detail.yejc = level;
+                    detail.yejc_date = date;
+                    break;
+                case '三级':
+                case '四级':
+                    detail.ssjc = level;
+                    detail.ssjc_date = date;
+                    break;
+                default:
+                    log.error(`残疾级别有误:${index}行 ${level}`);
+                    continue;
+            }
+
+            let data = {
+                index: index - beginRow + 1,
+                idcard,
+                name,
+                detail,
+                complain
+            }
+
+            yield data;
+        }
+    }
+}
+
 function mergeData({ type, fetchFunc, date, xlsx, beginRow, endRow,
     complain = false, recreate = false }) {
     mergeFpData(
@@ -259,7 +307,7 @@ const typeMap = {
     }
  }
 
-async function affirmIdentity(findOptions) {
+async function affirmIdentity(date, findOptions) {
     const db = createFpDb();
     const fpBook = defineFpBook(db);
     await fpBook.sync({ force: false });
@@ -273,12 +321,19 @@ async function affirmIdentity(findOptions) {
         for (const type in typeMap) {
             if (d[type]) {
                 jbrdsf = typeMap[type].jbsf;
-                //TODO: changed or newly inserted
                 break;
             }
         }
-        log.info(`${i++} ${d.idcard} ${d.name} ${jbrdsf}`);
-        await d.update({ jbrdsf });
+
+        if (d.jbrdsf !== jbrdsf) {
+            if (d.jbrdsf) { // hoist level
+                log.info(`${i++} ${d.idcard} ${d.name} ${jbrdsf} <= ${d.jbrdsf}`);
+                await d.update({ jbrdsf, jbrdsf_last_date: date });
+            } else { // newly affirm
+                log.info(`${i++} ${d.idcard} ${d.name} ${jbrdsf}`);
+                await d.update({ jbrdsf, jbrdsf_first_date: date });
+            }
+        }
     }
 
     log.info('结束认定参保人员身份');
@@ -308,7 +363,9 @@ const exportMap = ({
     S: 'ssjc',
     T: 'ssjc_date',
     U: 'jbrdsf',
-    V: 'jbcbqk'
+    V: 'jbrdsf_first_date',
+    W: 'jbrdsf_last_date',
+    X: 'jbcbqk'
 });
 
 async function exportData(tmplXlsx, saveXlsx, findOptions) {
@@ -473,11 +530,22 @@ program
     });
 
 program
+    .command('cjry')
+    .arguments('<date> <xlsx> <beginRow> <endRow>')
+    .description('合并残疾人员数据')
+    .action((date, xlsx, beginRow, endRow) => {
+        mergeData({
+            type: '残疾人员', fetchFunc: fetchCjData,
+            date, xlsx, beginRow, endRow
+        });
+    });
+
+program
     .command('rdsf')
-    .arguments('[idcards]')
+    .arguments('<date> [idcards]')
     .description('认定居保身份')
-    .action(() => {
-        const idcards = process.argv.slice(3);
+    .action((date) => {
+        const idcards = process.argv.slice(4);
         let findOptions = {}
         if (idcards.length > 0) {
             const where = [];
@@ -490,7 +558,22 @@ program
                 }
             }
         }
-        affirmIdentity(findOptions);
+        affirmIdentity(date, findOptions);
+    });
+
+program
+    .command('drjb')
+    .arguments('<xlsx> <beginRow> <endRow> [\'recreate\']')
+    .description('导入居保参保人员明细表')
+    .action((xlsx, beginRow, endRow, recreate) => {
+        importJbdata(xlsx, beginRow, endRow, recreate === 'recreate');
+    });
+
+program
+    .command('jbzt')
+    .description('更新居保参保状态')
+    .action(() => {
+        updateJbzt();
     });
 
 program
@@ -514,21 +597,6 @@ program
         const tmplXlsx = 'D:\\精准扶贫\\雨湖区精准扶贫底册模板.xlsx';
         const saveXlsx = `D:\\精准扶贫\\雨湖区精准扶贫底册${getFormattedDate()}.xlsx`;
         exportData(tmplXlsx, saveXlsx, findOptions);
-    });
-
-program
-    .command('drjb')
-    .arguments('<xlsx> <beginRow> <endRow> [\'recreate\']')
-    .description('导入居保参保人员明细表')
-    .action((xlsx, beginRow, endRow, recreate) => {
-        importJbdata(xlsx, beginRow, endRow, recreate === 'recreate');
-    });
-
-program
-    .command('jbzt')
-    .description('更新居保参保状态')
-    .action(() => {
-        updateJbzt();
     });
 
 program.parse(process.argv);
