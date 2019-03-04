@@ -69,7 +69,8 @@ async function* fetchPkData({ date, xlsx, beginRow, endRow, complain }) {
                     idcard, name, birthDay,
                     xzj, csq,
                     pkrk: '是', 
-                    pkrk_date: date
+                    pkrk_date: date,
+                    sypkry: '是'
                 },
                 complain
             }
@@ -101,7 +102,8 @@ async function* fetchTkData({ date, xlsx, beginRow, endRow, complain }) {
                     name, idcard, birthDay,
                     xzj, csq, address,
                     tkry: '是',
-                    tkry_date: date
+                    tkry_date: date,
+                    sypkry: '是'
                 },
                 complain
             }
@@ -150,9 +152,11 @@ async function* fetchCsdbData({ date, xlsx, beginRow, endRow, complain }) {
                         if (type == '全额救助') {
                             data.detail.qedb = '城市';
                             data.detail.qedb_date = date;
+                            data.detail.sypkry = '是';
                         } else if (type == '差额救助') {
                             data.detail.cedb = '城市';
                             data.detail.cedb_date = date;
+                            data.detail.sypkry = '是';
                         }
                         yield data;
                     } else {
@@ -205,9 +209,11 @@ async function* fetchNcdbData({ date, xlsx, beginRow, endRow, complain }) {
                         if (type == '全额') {
                             data.detail.qedb = '农村';
                             data.detail.qedb_date = date;
+                            data.detail.sypkry = '是';
                         } else if (type == '差额') {
                             data.detail.cedb = '农村';
                             data.detail.cedb_date = date;
+                            data.detail.sypkry = '是';
                         }
                         yield data;
                     } else {
@@ -362,10 +368,11 @@ const exportMap = ({
     R: 'yejc_date',
     S: 'ssjc',
     T: 'ssjc_date',
-    U: 'jbrdsf',
-    V: 'jbrdsf_first_date',
-    W: 'jbrdsf_last_date',
-    X: 'jbcbqk'
+    U: 'sypkry',
+    V: 'jbrdsf',
+    W: 'jbrdsf_first_date',
+    X: 'jbrdsf_last_date',
+    Y: 'jbcbqk'
 });
 
 async function exportData(tmplXlsx, saveXlsx, findOptions) {
