@@ -13,7 +13,7 @@ const {
     DyshInfoRequest, DyshInfoResponse, 
     BankAccountInfoRequest, BankAccountInfoResponse  
 } = require('../lib/service');
-const { createFpDb, defineFpTable } = require('../lib/db');
+const { Database, createFpDb, defineFpBook } = require('../lib/db');
 
 function stop(msg, code = -1) {
     console.error(msg);
@@ -50,7 +50,7 @@ program
         } else {
             stop('日期格式有误');
         }
-        const saveXlsx = `${rootDir}\\到龄贫困人员待遇核定情况表${dt}.xlsx`;
+        const saveXlsx = `${rootDir}\\到龄贫困人员待遇核定情况表(截至${dt}).xlsx`;
         downloadFpdyhdList(fphdXlsx, saveXlsx, date);
     })
 
@@ -107,15 +107,15 @@ async function downloadPaylist(infoXlsx, saveXlsx) {
 
     if (datas && datas.length > 0) {
         const db = createFpDb();
-        const fpTable = defineFpTable(db);
-        await fpTable.sync();
+        const fpBook = defineFpBook(db);
+        await fpBook.sync();
         for (const data of datas) {
             const idcard = data.idcard;
-            const p = await fpTable.findOne({ where: { idcard } });
+            const p = await fpBook.findOne({ where: { idcard, sypkry: { [Database.Op.ne]: null } } });
             if (p) {
                 data.bz = '按人社厅发〔2018〕111号文办理';
                 data.fpName = p.name;
-                data.fpType = p.type;
+                data.fpType = p.jbrdsf;
             } else {
                 data.bz = '';
                 data.fpName = '';
@@ -366,18 +366,18 @@ async function downloadFpdyhdList(fphdXlsx, saveXlsx, dlny) {
         const info = new DyhdInfoResponse(session.get());
         if (info.datas.length > 0) {
             const db = createFpDb();
-            const fpTable = defineFpTable(db);
-            fpTable.sync().then(async () => {
+            const fpBook = defineFpBook(db);
+            fpBook.sync().then(async () => {
                 for (const data of info.datas) {
                     const idcard = data.idcard;
-                    const p = await fpTable.findOne({ where: { idcard } });
-                    const yjnx = data.yjnx;
-                    const sjnx = data.sjnx;
-                    let qjns = data.yjnx - data.sjnx;
-                    if (qjns < 0) qjns = 0;
-                    let bz = data.bz;
-                    if (!bz) bz = '';
+                    const p = await fpBook.findOne({ where: { idcard, sypkry: { [Database.Op.ne]: null } } });
                     if (p) {
+                        const yjnx = data.yjnx;
+                        const sjnx = data.sjnx;
+                        let qjns = data.yjnx - data.sjnx;
+                        if (qjns < 0) qjns = 0;
+                        let bz = data.bz;
+                        if (!bz) bz = '';
                         result.push({
                             xzqh: data.xzqh,
                             name: data.name,
@@ -386,7 +386,7 @@ async function downloadFpdyhdList(fphdXlsx, saveXlsx, dlny) {
                             sex: data.sex,
                             hjxz: data.hjxz,
                             fpName: p.name,
-                            fpType: p.type,
+                            fpType: p.jbrdsf,
                             jbzt: data.state,
                             dyny: data.lqny,
                             yjnx, sjnx, qjns,
