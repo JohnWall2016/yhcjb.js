@@ -1,24 +1,9 @@
 'use strict';
 
 const { it } = require('./logtest');
-const { Database, createFpDb, defineFpBook } = require('../lib/db');
+const { Database, createFpDb, defineFpBook, Model } = require('../lib/db');
 
 describe('sequelize test', function() {
-
-    function createFpDb() {
-        return new Database({
-            dialect:  'mysql',
-            host:     'localhost',
-            port:     3306,
-            database: 'jzfp',
-            username: 'root',
-            password: 'root',
-            define:   {
-                charset: 'utf8'
-            },
-            operatorsAliases: false
-        });
-    }
 
     /**
      * @param { Database } db 
@@ -128,7 +113,7 @@ describe('sequelize test', function() {
         });
     });
 
-    it.only('get fpBook schema', async function(){
+    it('get fpBook schema', async function() {
         const db = createFpDb();
         const fpBook = defineFpBook(db);
 
@@ -149,5 +134,19 @@ describe('sequelize test', function() {
 
         await db.close();
     });
+
+    it.only('get fpBook fieldNames', async function() {
+        const db = createFpDb();
+        const fpBook = defineFpBook(db);
+
+        await fpBook.sync();
+
+        const fpBookFn = fpBook.getFieldNames();
+
+        it.log(fpBookFn.jbrdsf);
+        it.log(fpBook.rawAttributes);
+
+        await db.close();
+    })
 
 });

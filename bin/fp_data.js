@@ -457,25 +457,17 @@ async function updateJbzt(date) {
     const jbTable = defineJbTable(db);
     await jbTable.sync({ force: false });
 
-    function getFieldName(field) {
-        let fld = this.rawAttributes[field];
-        if (fld) {
-            return `${fld.Model.name}.${fld.field}`;
-        }
-        return fld;
-    }
-
-    fpBook.f = getFieldName;
-    jbTable.f = getFieldName;
+    const fpBookFlds = fpBook.getFieldNames();
+    const jbTableFlds = jbTable.getFieldNames();
 
     for (const [cbzt, jfzt, jbzt] of jbztMap) {
         const sql = `
 update ${fpBook.name}, ${jbTable.name}
-   set ${fpBook.f('jbcbqk')} = '${jbzt}', ${fpBook.f('jbcbqk_date')} = '${date}'
- where ${fpBook.f('idcard')}=${jbTable.f('idcard')} and
-       ${jbTable.f('cbzt')}='${cbzt}' and ${jbTable.f('jfzt')}='${jfzt}' and
-       (${fpBook.f('jbcbqk_date')} is null or 
-        (${fpBook.f('jbcbqk')} is null or ${fpBook.f('jbcbqk')} <> '${jbzt}'))`;
+   set ${fpBookFlds.jbcbqk} = '${jbzt}', ${fpBookFlds.jbcbqk_date} = '${date}'
+ where ${fpBookFlds.idcard}=${jbTableFlds.idcard} and
+       ${jbTableFlds.cbzt}='${cbzt}' and ${jbTableFlds.jfzt}='${jfzt}' and
+       (${fpBookFlds.jbcbqk_date} is null or 
+        (${fpBookFlds.jbcbqk} is null or ${fpBookFlds.jbcbqk} <> '${jbzt}'))`;
 
         log.info(sql);
 
@@ -612,6 +604,15 @@ program
         const tmplXlsx = 'D:\\精准扶贫\\雨湖区精准扶贫底册模板.xlsx';
         const saveXlsx = `D:\\精准扶贫\\雨湖区精准扶贫底册${getFormattedDate()}.xlsx`;
         exportData(tmplXlsx, saveXlsx, findOptions);
+    });
+
+program
+    .command('sfbg')
+    .arguments('<dir> <rddate:yyyymm> <sfdate:yyyymmdd>')
+    .description('导出居保参保身份变更信息表')
+    .action((dir, rddate, sfdate) => {
+        // export data whose created or changed affirming identity date equals rddate
+        //               and created JB identity date equals or after sfdate.
     });
 
 program.parse(process.argv);
