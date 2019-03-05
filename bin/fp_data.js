@@ -70,7 +70,7 @@ async function* fetchPkData({ date, xlsx, beginRow, endRow, complain }) {
                     xzj, csq,
                     pkrk: '是', 
                     pkrk_date: date,
-                    sypkry: '是'
+                    sypkry: '贫困人口'
                 },
                 complain
             }
@@ -103,7 +103,7 @@ async function* fetchTkData({ date, xlsx, beginRow, endRow, complain }) {
                     xzj, csq, address,
                     tkry: '是',
                     tkry_date: date,
-                    sypkry: '是'
+                    sypkry: '特困人员'
                 },
                 complain
             }
@@ -152,11 +152,11 @@ async function* fetchCsdbData({ date, xlsx, beginRow, endRow, complain }) {
                         if (type == '全额救助') {
                             data.detail.qedb = '城市';
                             data.detail.qedb_date = date;
-                            data.detail.sypkry = '是';
+                            data.detail.sypkry = '低保对象';
                         } else if (type == '差额救助') {
                             data.detail.cedb = '城市';
                             data.detail.cedb_date = date;
-                            data.detail.sypkry = '是';
+                            data.detail.sypkry = '低保对象';
                         }
                         yield data;
                     } else {
@@ -209,11 +209,11 @@ async function* fetchNcdbData({ date, xlsx, beginRow, endRow, complain }) {
                         if (type == '全额') {
                             data.detail.qedb = '农村';
                             data.detail.qedb_date = date;
-                            data.detail.sypkry = '是';
+                            data.detail.sypkry = '低保对象';
                         } else if (type == '差额') {
                             data.detail.cedb = '农村';
                             data.detail.cedb_date = date;
-                            data.detail.sypkry = '是';
+                            data.detail.sypkry = '低保对象';
                         }
                         yield data;
                     } else {
@@ -372,7 +372,8 @@ const exportMap = ({
     V: 'jbrdsf',
     W: 'jbrdsf_first_date',
     X: 'jbrdsf_last_date',
-    Y: 'jbcbqk'
+    Y: 'jbcbqk',
+    Z: 'jbcbqk_date'
 });
 
 async function exportData(tmplXlsx, saveXlsx, findOptions) {
@@ -447,7 +448,7 @@ const jbztMap = [
     [1, 1, '正常缴费'],[2, 2, '暂停缴费']
 ];
 
-async function updateJbzt() {
+async function updateJbzt(date) {
     const db = createFpDb();
 
     const fpBook = defineFpBook(db);
@@ -470,9 +471,11 @@ async function updateJbzt() {
     for (const [cbzt, jfzt, jbzt] of jbztMap) {
         const sql = `
 update ${fpBook.name}, ${jbTable.name}
-   set ${fpBook.f('jbcbqk')} = '${jbzt}'
+   set ${fpBook.f('jbcbqk')} = '${jbzt}', ${fpBook.f('jbcbqk_date')} = '${date}'
  where ${fpBook.f('idcard')}=${jbTable.f('idcard')} and
-       ${jbTable.f('cbzt')}='${cbzt}' and ${jbTable.f('jfzt')}='${jfzt}'`;
+       ${jbTable.f('cbzt')}='${cbzt}' and ${jbTable.f('jfzt')}='${jfzt}' and
+       (${fpBook.f('jbcbqk_date')} is null or 
+        (${fpBook.f('jbcbqk')} is null or ${fpBook.f('jbcbqk')} <> '${jbzt}'))`;
 
         log.info(sql);
 
@@ -488,11 +491,11 @@ program
     .version('0.0.1')
     .description('扶贫数据导库程序');
 
-// pkrk 201902 D:\精准扶贫\201902\7372人贫困人口台账.xlsx 2 7373
 program
     .command('pkrk')
-    .arguments('<date> <xlsx> <beginRow> <endRow>')
+    .arguments('<date:yyyymm> <xlsx> <beginRow> <endRow>')
     .description('合并贫困人口数据')
+    .usage(String.raw`201902 D:\\精准扶贫\\201902\\7372人贫困人口台账.xlsx 2 7373`)
     .action((date, xlsx, beginRow, endRow) => {
         mergeData({
             type: '贫困人口', fetchFunc: fetchPkData,
@@ -500,11 +503,11 @@ program
         });
     });
 
-// tkry 201902 D:\精准扶贫\201902\城乡特困201902.xlsx 2 949
 program
     .command('tkry')
-    .arguments('<date> <xlsx> <beginRow> <endRow>')
+    .arguments('<date:yyyymm> <xlsx> <beginRow> <endRow>')
     .description('合并特困人员数据')
+    .usage(String.raw`201902 D:\\精准扶贫\\201902\\城乡特困201902.xlsx 2 949`)
     .action((date, xlsx, beginRow, endRow) => {
         mergeData({
             type: '特困人员', fetchFunc: fetchTkData,
@@ -512,11 +515,11 @@ program
         });
     });
 
-// csdb 201902 D:\精准扶贫\201902\2019年2月城市名册.xlsx 2 6531
 program
     .command('csdb')
-    .arguments('<date> <xlsx> <beginRow> <endRow>')
+    .arguments('<date:yyyymm> <xlsx> <beginRow> <endRow>')
     .description('合并城市低保数据')
+    .usage(String.raw`201902 D:\\精准扶贫\\201902\\2019年2月城市名册.xlsx 2 6531`)
     .action((date, xlsx, beginRow, endRow) => {
         mergeData({
             type: '城市低保', fetchFunc: fetchCsdbData,
@@ -524,11 +527,11 @@ program
         });
     });
 
-// ncdb 201902 D:\精准扶贫\201902\2019年2月雨湖区农村低保名册.xlsx 2 2232
 program
     .command('ncdb')
-    .arguments('<date> <xlsx> <beginRow> <endRow>')
+    .arguments('<date:yyyymm> <xlsx> <beginRow> <endRow>')
     .description('合并农村低保数据')
+    .usage(String.raw`201902 D:\\精准扶贫\\201902\\2019年2月雨湖区农村低保名册.xlsx 2 2232`)
     .action((date, xlsx, beginRow, endRow) => {
         mergeData({
             type: '农村低保', fetchFunc: fetchNcdbData,
@@ -538,8 +541,9 @@ program
 
 program
     .command('cjry')
-    .arguments('<date> <xlsx> <beginRow> <endRow>')
+    .arguments('<date:yyyymm> <xlsx> <beginRow> <endRow>')
     .description('合并残疾人员数据')
+    .usage(String.raw`201902 D:\\精准扶贫\\201902\\雨湖区全区残疾人20190219.xlsx 2 10212`)
     .action((date, xlsx, beginRow, endRow) => {
         mergeData({
             type: '残疾人员', fetchFunc: fetchCjData,
@@ -549,8 +553,9 @@ program
 
 program
     .command('rdsf')
-    .arguments('<date> [idcards]')
+    .arguments('<date:yyyymm> [idcards]')
     .description('认定居保身份')
+    .usage(String.raw`201902`)
     .action((date) => {
         const idcards = process.argv.slice(4);
         let findOptions = {}
@@ -572,15 +577,18 @@ program
     .command('drjb')
     .arguments('<xlsx> <beginRow> <endRow> [\'recreate\']')
     .description('导入居保参保人员明细表')
+    .usage(String.raw`D:\\精准扶贫\\居保参保人员明细表20190305A.xlsx 2 49858 recreate`)
+    .usage(String.raw`D:\\精准扶贫\\居保参保人员明细表20190305B.xlsx 2 48726`)
     .action((xlsx, beginRow, endRow, recreate) => {
         importJbdata(xlsx, beginRow, endRow, recreate === 'recreate');
     });
 
 program
     .command('jbzt')
+    .arguments('<date:yyyymmdd>')
     .description('更新居保参保状态')
-    .action(() => {
-        updateJbzt();
+    .action((date) => {
+        updateJbzt(date);
     });
 
 program
