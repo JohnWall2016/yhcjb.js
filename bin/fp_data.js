@@ -3,6 +3,7 @@
 const Xlsx = require('xlsx-populate');
 const { Database, createFpDb, defineFpBook, defineJbTable } = require('../lib/db');
 const { createLogger, getFormattedDate } = require('../lib/util');
+const fs = require('fs');
 
 const log = createLogger('扶贫数据导入');
 
@@ -463,15 +464,90 @@ async function updateJbzt(date) {
     for (const [cbzt, jfzt, jbzt] of jbztMap) {
         const sql = `
 update ${fpBook.name}, ${jbTable.name}
-   set ${fpBookFlds.jbcbqk} = '${jbzt}', ${fpBookFlds.jbcbqk_date} = '${date}'
- where ${fpBookFlds.idcard}=${jbTableFlds.idcard} and
-       ${jbTableFlds.cbzt}='${cbzt}' and ${jbTableFlds.jfzt}='${jfzt}' and
-       (${fpBookFlds.jbcbqk_date} is null or 
-        (${fpBookFlds.jbcbqk} is null or ${fpBookFlds.jbcbqk} <> '${jbzt}'))`;
+   set ${fpBookFlds.jbcbqk}='${jbzt}', ${fpBookFlds.jbcbqk_date}='${date}'
+ where ${fpBookFlds.idcard}=${jbTableFlds.idcard} 
+   and ${jbTableFlds.cbzt}='${cbzt}'
+   and ${jbTableFlds.jfzt}='${jfzt}'
+   and (${fpBookFlds.jbcbqk_date} is null or 
+        (${fpBookFlds.jbcbqk} is null or ${fpBookFlds.jbcbqk}<>'${jbzt}'))`;
 
         log.info(sql);
 
         await db.query(sql);
+    }
+
+    await db.close();
+}
+
+const jbsfMap = [
+    ['贫困人口一级', '051'],
+    ['特困一级',    '031'],
+    ['低保对象一级', '061'],
+    ['低保对象二级', '062'],
+    ['残一级',      '021'],
+    ['残二级',      '022']
+]
+
+async function exportSfbgxx(dir) {
+    const tmplXlsx = 'D:\\精准扶贫\\批量信息变更模板.xlsx';
+    const rowsPerXlsx = 500;
+
+    if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir);
+    } else {
+        log.info(`目录已存在: ${dir}`);
+        return;
+    }
+
+    const db = createFpDb();
+
+    const fpBook = defineFpBook(db);
+    await fpBook.sync({ force: false });
+
+    const jbTable = defineJbTable(db);
+    await jbTable.sync({ force: false });
+
+    const fpBookFlds = fpBook.getFieldNames();
+    const jbTableFlds = jbTable.getFieldNames();
+
+    for (const [type, code] of jbsfMap) {
+        const sql = `
+select ${jbTableFlds.name} as name, ${jbTableFlds.idcard} as idcard
+  from ${jbTable.name}, ${fpBook.name}
+ where ${jbTableFlds.idcard}=${fpBookFlds.idcard}
+   and ${fpBookFlds.jbrdsf}='${type}'
+   and ${jbTableFlds.cbsf}<>'${code}'
+   and ${jbTableFlds.cbzt}='1'
+   and ${jbTableFlds.jfzt}='1'`;
+        
+        const result = await db.query(sql, {type: Database.QueryTypes.SELECT});
+
+        const total = result.length;
+        if (total > 0) {
+            log.info(`导出 ${type} 批量信息变更表: ${total} 条`);
+
+            const files = Math.ceil(total / rowsPerXlsx);
+            for (let i = 0; i < files; i++) {
+                let start = i * 500;
+                let end = (i === files - 1) ? total : (i + 1) * 500;
+
+                const workbook = await Xlsx.fromFileAsync(tmplXlsx);
+                const sheet = workbook.sheet(0);
+                let [startRow, currentRow] = [2, 2];
+                for (let idx = start; idx < end; idx++) {
+                    let row;
+                    if (currentRow > startRow)
+                        row = sheet.insertAndCopyRow(currentRow, startRow, true);
+                    else
+                        row = sheet.row(currentRow);
+                    row.cell('A').value(result[idx].idcard);
+                    row.cell('C').value(result[idx].name);
+                    row.cell('H').value(code);
+                    currentRow ++;
+                }
+                workbook.toFileAsync(`${dir}\\${type}批量信息变更表${i+1}.xlsx`);
+            }
+        }
     }
 
     await db.close();
@@ -608,11 +684,10 @@ program
 
 program
     .command('sfbg')
-    .arguments('<dir> <rddate:yyyymm> <sfdate:yyyymmdd>')
+    .arguments('<dir>')
     .description('导出居保参保身份变更信息表')
-    .action((dir, rddate, sfdate) => {
-        // export data whose created or changed affirming identity date equals rddate
-        //               and created JB identity date equals or after sfdate.
+    .action(dir => {
+        exportSfbgxx(dir);
     });
 
 program.parse(process.argv);
