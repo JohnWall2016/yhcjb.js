@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const Xlsx = require('xlsx-populate');
 const program = require('commander');
+const { stop } = require('../lib/util');
 
 program
     .version('0.0.1')
@@ -43,6 +44,7 @@ async function generateTables(xlsx, beginRow, endRow) {
     console.log('生成分组映射表');
     let map = {};
     for (let index = beginRow; index <= endRow; index++) {
+        if (sheet.row(index).cell('G').value() != '1') continue;
         let value = sheet.row(index).cell('A').value();
         let m;
         for (let i = 0; i < reXzhq.length; i++) {
@@ -77,31 +79,31 @@ async function generateTables(xlsx, beginRow, endRow) {
 
         for (let csq of Object.keys(map[xzj])) {
             console.log(`  ${csq}: ${map[xzj][csq]}`);
-            fs.mkdirSync(path.join(outputDir, xzj, csq));
 
             let outWorkbook = await Xlsx.fromFileAsync(tmplXlsx);
             let outSheet = outWorkbook.sheet(0);
-            let [startRow, currentRow] = [5, 5];
+            let [startRow, currentRow, index] = [5, 5, 0];
 
-            map[xzj][csq].forEach((rowIndex, index) => {
+            outSheet.cell('C2').value(`${xzj}${csq}`);
+
+            map[xzj][csq].forEach(rowIndex => {
+                let row = sheet.row(rowIndex);
+                console.log(`    ${index+1} ${row.cell('C').value()} ${row.cell('D').value()}`);
+                
                 let outRow;
                 if (currentRow > startRow)
                     outRow = outSheet.insertAndCopyRow(currentRow, startRow, true);
                 else
                     outRow = outSheet.row(currentRow);
-
-                let row = sheet.row(rowIndex);
-
-                console.log(`    ${index+1} ${row.cell('C').value()} ${row.cell('D').value()}`);
-
                 outRow.cell('A').value(index + 1);
                 outRow.cell('B').value(row.cell('C').value());
                 outRow.cell('C').value(`${row.cell('E').value() == '1' ? '男' : '女'}`);
                 outRow.cell('D').value(`${row.cell('D').value()}`);
                 outRow.cell('E').value(row.cell('A').value());
-                outRow.cell('M').value(row.cell('J').value());
+                outRow.cell('M').value(`上次认证时间：${row.cell('J').value()}`);
 
                 currentRow ++;
+                index ++;
             });
 
             outWorkbook.toFileAsync(path.join(outputDir, xzj, `${csq}.xlsx`));
