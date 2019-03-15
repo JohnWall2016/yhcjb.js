@@ -22,7 +22,7 @@ program
 
 program
     .command('split')
-    .arguments("<type:'sfzt'|'sczt'> <xlsx> <beginRow> <endRow>")
+    .arguments("<'sfzt'|'sczt'> <xlsx> <beginRow> <endRow>")
     .description('核查信息按街道分组')
     .action((type, xlsx, beginRow, endRow) => {
         split(type, xlsx, beginRow, endRow);
@@ -31,7 +31,7 @@ program
 program
     .command('pdf')
     .arguments('<inDir> <outDir>')
-    .description('将指定目录下的图片转换成另一个目录下的pdf')
+    .description('转换输入目录下的图片为输出目录下的pdf')
     .action((inDir, outDir) => {
         generatePdfs(inDir, outDir);
     })
