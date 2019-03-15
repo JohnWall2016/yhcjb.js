@@ -6,6 +6,7 @@ const Session = require('../lib/session');
 const { GrinfoRequest, GrinfoResponse } = require('../lib/service');
 const { appendToFileName } = require('../lib/util');
 const fs = require('fs'), path = require('path');
+const canvas = require('canvas');
 
 program
     .version('0.0.1')
@@ -26,6 +27,14 @@ program
     .action((type, xlsx, beginRow, endRow) => {
         split(type, xlsx, beginRow, endRow);
     });
+
+program
+    .command('pdf')
+    .arguments('<inDir> <outDir>')
+    .description('将指定目录下的图片转换成另一个目录下的pdf')
+    .action((inDir, outDir) => {
+        generatePdfs(inDir, outDir);
+    })
 
 program.parse(process.argv);
 
@@ -188,4 +197,22 @@ async function split(type, xlsx, beginRow, endRow) {
 
         outWorkbook.toFileAsync(path.join(outputDir, xzj, `0.${xzj}${fileName}`));
     }
+}
+
+async function generatePdfs(inDir, outDir, extFilter=/\.(jpg)$/i) {
+    const files = fs.readdirSync(inDir);
+    files.forEach((file, index) => {
+        if (file.match(extFilter)) {
+            console.log(`${index}. 转换${file}`);
+            const img = new canvas.Image;
+            img.src = fs.readFileSync(path.join(inDir, file));
+            const pdf = new canvas.Canvas(img.width, img.height, 'pdf');
+            const ctx = pdf.getContext('2d');
+            ctx.drawImage(img, 0, 0, img.width, img.height);
+            fs.writeFileSync(
+                path.join(outDir, file.replace(extFilter, '.pdf')), 
+                pdf.toBuffer()
+            );
+        }
+    });
 }

@@ -109,5 +109,4 @@ async function generateTables(xlsx, beginRow, endRow) {
             outWorkbook.toFileAsync(path.join(outputDir, xzj, `${csq}.xlsx`));
         }
     }
-
 }
