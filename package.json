@@ -10,7 +10,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "canvas": "^2.3.1",
+    "canvas": "^2.4.0",
     "commander": "^2.19.0",
     "dateformat": "^3.0.3",
     "full-icu": "^1.2.1",
