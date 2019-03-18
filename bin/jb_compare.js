@@ -206,9 +206,9 @@ async function generatePdfs(inDir, outDir, extFilter=/\.(jpg)$/i) {
             console.log(`${index}. 转换${file}`);
             const img = new canvas.Image;
             img.src = fs.readFileSync(path.join(inDir, file));
-            const pdf = new canvas.Canvas(img.width, img.height, 'pdf');
+            const pdf = new canvas.Canvas(img.width/3, img.height/3, 'pdf');
             const ctx = pdf.getContext('2d');
-            ctx.drawImage(img, 0, 0, img.width, img.height);
+            ctx.drawImage(img, 0, 0, img.width/3, img.height/3);
             fs.writeFileSync(
                 path.join(outDir, file.replace(extFilter, '.pdf')), 
                 pdf.toBuffer()
