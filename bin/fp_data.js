@@ -1,17 +1,17 @@
 'use strict';
 
 const Xlsx = require('xlsx-populate');
-const { Database, createFpDb, defineFpBook, defineJbTable } = require('../lib/db');
+const { Database, createFpDb, defineFpBook, defineFpHistoryBook, defineJbTable } = require('../lib/db');
 const { createLogger, getFormattedDate } = require('../lib/util');
 const fs = require('fs');
 
 const log = createLogger('扶贫数据导入');
 
 /**
- * 导库函数
- * @param { AsyncIterableIterator<{index, idcard, name, detail, complain}> } data
+ * 合并扶贫数据函数
+ * @param { AsyncIterableIterator<> } data
  */
-async function mergeFpData(data, { recreate = false, type } = {}) {
+async function mergeFpData(data, recreate = false) {
     const db = createFpDb();
     const fpBook = defineFpBook(db);
 
@@ -21,35 +21,73 @@ async function mergeFpData(data, { recreate = false, type } = {}) {
     } else {
         await fpBook.sync({ force: false });
     }
-    const typeMsg = type ? `: ${type}`: '';
 
-    log.info(`开始合并扶贫数据${typeMsg}`);
-    for await (const {index, idcard, name, detail, complain} of data) {
-        log.info(`${index} ${idcard} ${name}`);
-        if (idcard) {
+    log.info(`开始合并扶贫数据`);
+    let index = 1;
+    for await (const d of data) {
+        log.info(`${index++} ${d.idcard} ${d.name}`);
+        if (d.idcard) {
             let record = await fpBook.findOne({
-                where: { idcard }
+                where: { idcard: d.idcard }
             });
             if (!record) {
-                await fpBook.upsert(detail);
+                await fpBook.upsert(d);
             } else {
-                for (const key in detail) {
-                    if (record[key]) delete detail[key];
+                for (const key in d) {
+                    if (record[key]) delete d[key];
                 }
-                if (Object.keys(detail).length > 0) {
-                    await record.update(detail);
-                } else if (complain) {
-                    log.info(`${idcard} ${name}: 没有合并任何字段`);
+                if (Object.keys(d).length > 0) {
+                    await record.update(d);
                 }
             }
         }
     }
-    log.info(`结束合并扶贫数据${typeMsg}`);
+    log.info(`结束合并扶贫数据`);
 
     await db.close();
 }
 
-async function* fetchPkData({ date, xlsx, beginRow, endRow, complain }) {
+/**
+ * 导入扶贫数据函数
+ * @param { AsyncIterableIterator<{idcard, name, birthDay, xzj, csq, address, type, detail, date}> } data
+ */
+async function importFpData(data, { recreate = false, type } = {}) {
+    const db = createFpDb();
+    const fpBook = defineFpHistoryBook(db);
+
+    if (recreate) {
+        log.info('重新创建扶贫历史数据底册');
+        await fpBook.sync({ force: true });
+    } else {
+        await fpBook.sync({ force: false });
+    }
+    const typeMsg = type ? `: ${type}`: '';
+
+    log.info(`开始导入扶贫数据${typeMsg}`);
+    let index = 1;
+    for await (const d of data) {
+        log.info(`${index++} ${d.idcard} ${d.name}`);
+        if (d.idcard) {
+            let record = await fpBook.findOne({
+                where: { idcard: d.idcard, type: d.type, date: d.date }
+            });
+            if (!record) {
+                await fpBook.upsert(d);
+            } else {
+                await record.update(d);
+            }
+        }
+    }
+    log.info(`结束导入扶贫数据${typeMsg}`);
+
+    await db.close();
+}
+
+/**
+ * 迭代获取贫困数据
+ * @param {*} param0 
+ */
+async function* fetchPkData({ date, xlsx, beginRow, endRow }) {
     const workbook = await Xlsx.fromFileAsync(xlsx);
     const sheet = workbook.sheet(0);
 
@@ -63,17 +101,14 @@ async function* fetchPkData({ date, xlsx, beginRow, endRow, complain }) {
                 csq = row.cell('D').value();
 
             let data = {
-                index: index - beginRow + 1,
                 idcard,
                 name,
-                detail: {
-                    idcard, name, birthDay,
-                    xzj, csq,
-                    pkrk: '是', 
-                    pkrk_date: date,
-                    sypkry: '贫困人口'
-                },
-                complain
+                birthDay,
+                xzj, 
+                csq,
+                type: '贫困人口',
+                detail: '是',
+                date
             }
 
             yield data;
@@ -81,7 +116,40 @@ async function* fetchPkData({ date, xlsx, beginRow, endRow, complain }) {
     }
 }
 
-async function* fetchTkData({ date, xlsx, beginRow, endRow, complain }) {
+async function* fetchPkData2({ date, xlsx, beginRow, endRow }) {
+    const workbook = await Xlsx.fromFileAsync(xlsx);
+    const sheet = workbook.sheet(0);
+
+    for (let index = beginRow; index <= endRow; index ++) {
+        const row = sheet.row(index);
+        if (row) {
+            const name = row.cell('H').value(),
+                idcard = String(row.cell('I').value()).substr(0, 18),
+                birthDay = idcard.substr(6, 8),
+                xzj = row.cell('C').value(),
+                csq = row.cell('D').value();
+
+            let data = {
+                idcard,
+                name,
+                birthDay,
+                xzj, 
+                csq,
+                type: '贫困人口',
+                detail: '是',
+                date
+            }
+
+            yield data;
+        }
+    }
+}
+
+/**
+ * 迭代获取特困数据
+ * @param {*} param0 
+ */
+async function* fetchTkData({ date, xlsx, beginRow, endRow }) {
     const workbook = await Xlsx.fromFileAsync(xlsx);
     const sheet = workbook.sheet(0);
 
@@ -96,17 +164,15 @@ async function* fetchTkData({ date, xlsx, beginRow, endRow, complain }) {
                 address = row.cell('D').value();
 
             let data = {
-                index: index - beginRow + 1,
                 idcard,
                 name,
-                detail: {
-                    name, idcard, birthDay,
-                    xzj, csq, address,
-                    tkry: '是',
-                    tkry_date: date,
-                    sypkry: '特困人员'
-                },
-                complain
+                birthDay,
+                xzj, 
+                csq, 
+                address,
+                type: '特困人员',
+                detail: '是',
+                date
             }
 
             yield data;
@@ -114,7 +180,11 @@ async function* fetchTkData({ date, xlsx, beginRow, endRow, complain }) {
     }
 }
 
-async function* fetchCsdbData({ date, xlsx, beginRow, endRow, complain }) {
+/**
+ * 迭代获取城市低保数据
+ * @param {*} param0 
+ */
+async function* fetchCsdbData({ date, xlsx, beginRow, endRow }) {
     const workbook = await Xlsx.fromFileAsync(xlsx);
     const sheet = workbook.sheet(0);
 
@@ -141,23 +211,19 @@ async function* fetchCsdbData({ date, xlsx, beginRow, endRow, complain }) {
                     if (idcard.length == 18) {
                         const birthDay = idcard.substr(6, 8);
                         let data = {
-                            index,
                             idcard,
                             name,
-                            detail: {
-                                name, idcard, birthDay,
-                                xzj, csq, address
-                            },
-                            complain
-                        }
+                            birthDay,
+                            xzj,
+                            csq,
+                            address,
+                            detail: '城市',
+                            date
+                        };
                         if (type == '全额救助') {
-                            data.detail.qedb = '城市';
-                            data.detail.qedb_date = date;
-                            data.detail.sypkry = '低保对象';
+                            data.type = '全额低保人员';
                         } else if (type == '差额救助') {
-                            data.detail.cedb = '城市';
-                            data.detail.cedb_date = date;
-                            data.detail.sypkry = '低保对象';
+                            data.type = '差额低保人员';
                         }
                         yield data;
                     } else {
@@ -169,8 +235,10 @@ async function* fetchCsdbData({ date, xlsx, beginRow, endRow, complain }) {
     }
 }
 
-module.exports.fetchCsdbData = fetchCsdbData;
-
+/**
+ * 迭代获取农村低保数据
+ * @param {*} param0 
+ */
 async function* fetchNcdbData({ date, xlsx, beginRow, endRow, complain }) {
     const workbook = await Xlsx.fromFileAsync(xlsx);
     const sheet = workbook.sheet(0);
@@ -198,23 +266,19 @@ async function* fetchNcdbData({ date, xlsx, beginRow, endRow, complain }) {
                     if (idcard.length == 18) {
                         const birthDay = idcard.substr(6, 8);
                         let data = {
-                            index,
                             idcard,
                             name,
-                            detail: {
-                                name, idcard, birthDay,
-                                xzj, csq, address
-                            },
-                            complain
+                            birthDay,
+                            xzj,
+                            csq,
+                            address,
+                            detail: '农村',
+                            date
                         }
                         if (type == '全额') {
-                            data.detail.qedb = '农村';
-                            data.detail.qedb_date = date;
-                            data.detail.sypkry = '低保对象';
+                            data.type = '全额低保人员';
                         } else if (type == '差额') {
-                            data.detail.cedb = '农村';
-                            data.detail.cedb_date = date;
-                            data.detail.sypkry = '低保对象';
+                            data.type = '差额低保人员';
                         }
                         yield data;
                     } else {
@@ -226,7 +290,11 @@ async function* fetchNcdbData({ date, xlsx, beginRow, endRow, complain }) {
     }
 }
 
-async function* fetchCjData({ date, xlsx, beginRow, endRow, complain }) {
+/**
+ * 迭代获取残疾数据
+ * @param {*} param0 
+ */
+async function* fetchCjData({ date, xlsx, beginRow, endRow }) {
     const workbook = await Xlsx.fromFileAsync(xlsx);
     const sheet = workbook.sheet(0);
 
@@ -240,33 +308,29 @@ async function* fetchCjData({ date, xlsx, beginRow, endRow, complain }) {
                 address = row.cell('F').value(),
                 level = row.cell('D').value().trim();
 
-            const detail = {
-                idcard, name, birthDay,
-                xzj, address,
+            let data = {
+                idcard,
+                name,
+                birthDay,
+                xzj,
+                address,
+                date
             }
 
             switch (level) {
                 case '一级':
                 case '二级':
-                    detail.yejc = level;
-                    detail.yejc_date = date;
+                    data.type = '一二级残疾人员';
+                    data.detail = level;
                     break;
                 case '三级':
                 case '四级':
-                    detail.ssjc = level;
-                    detail.ssjc_date = date;
+                    data.type = '三四级残疾人员';
+                    data.detail = level;
                     break;
                 default:
                     log.error(`残疾级别有误:${index}行 ${level}`);
                     continue;
-            }
-
-            let data = {
-                index: index - beginRow + 1,
-                idcard,
-                name,
-                detail,
-                complain
             }
 
             yield data;
@@ -274,17 +338,72 @@ async function* fetchCjData({ date, xlsx, beginRow, endRow, complain }) {
     }
 }
 
-function mergeData({ type, fetchFunc, date, xlsx, beginRow, endRow,
-    complain = false, recreate = false }) {
-    mergeFpData(
-        fetchFunc({
-            date, xlsx,
-            beginRow: Number(beginRow),
-            endRow:   Number(endRow),
-            complain
-        }),
-        { recreate, type }
-    );
+function mergeData(date, recreate = false) {
+    const del = ['no', 'type', 'detail', 'date'];
+    const mappings = {
+        '贫困人口': {
+            ins: { pkrk: '是', sypkry: '贫困人口' }, 
+            map: { pkrk_date: 'date' }, 
+            del
+        },
+        '特困人员': {
+            ins: { tkry: '是', sypkry: '特困人员' }, 
+            map: { tkry_date: 'date' },
+            del
+        },
+        '全额低保人员': {
+            ins: { sypkry: '低保对象' }, 
+            map: { qedb: 'detail', qedb_date: 'date' },
+            del
+        },
+        '差额低保人员':  {
+            ins: { sypkry: '低保对象' }, 
+            map: { cedb: 'detail', cedb_date: 'date' },
+            del
+        },
+        '一二级残疾人员':  {
+            map: { yejc: 'detail', yejc_date: 'date' },
+            del
+        },
+        '三四级残疾人员':  {
+            map: { ssjc: 'detail', ssjc_date: 'date' },
+            del
+        },
+    };
+
+    async function* fetchFunc(date) {
+        const db = createFpDb();
+        const fpHBook = defineFpHistoryBook(db);
+
+        for (const type of Object.keys(mappings)) { 
+            let records = await fpHBook.findAll({
+                where: { type, date }
+            });
+
+            const mapping = mappings[type];
+            for (const data of records) {
+                Object.assign(data, mapping.ins);
+                for (const [k, v] of Object.entries(mapping.map)) {
+                    data[k] = data[v];
+                }
+                for (const k of mapping.del) {
+                    delete data[k];
+                }
+
+                yield data;
+            }
+        }
+
+        await db.close();
+    }
+
+    mergeFpData(fetchFunc(date), recreate);
+}
+
+function importData({ type, fetchFunc, date, xlsx, beginRow, endRow, recreate = false }) {
+    importFpData(fetchFunc({
+        date, xlsx, beginRow: Number(beginRow), endRow: Number(endRow)
+    }), { recreate, type });
 }
 
 const typeMap = {
@@ -562,11 +681,11 @@ program
 program
     .command('pkrk')
     .arguments('<date:yyyymm> <xlsx> <beginRow> <endRow>')
-    .description('合并贫困人口数据')
+    .description('导入贫困人口数据')
     .usage(String.raw`201902 D:\\精准扶贫\\201902\\7372人贫困人口台账.xlsx 2 7373`)
     .action((date, xlsx, beginRow, endRow) => {
-        mergeData({
-            type: '贫困人口', fetchFunc: fetchPkData,
+        importData({
+            type: '贫困人口', fetchFunc: fetchPkData2,
             date, xlsx, beginRow, endRow
         });
     });
@@ -574,10 +693,10 @@ program
 program
     .command('tkry')
     .arguments('<date:yyyymm> <xlsx> <beginRow> <endRow>')
-    .description('合并特困人员数据')
+    .description('导入特困人员数据')
     .usage(String.raw`201902 D:\\精准扶贫\\201902\\城乡特困201902.xlsx 2 949`)
     .action((date, xlsx, beginRow, endRow) => {
-        mergeData({
+        importData({
             type: '特困人员', fetchFunc: fetchTkData,
             date, xlsx, beginRow, endRow
         });
@@ -586,10 +705,10 @@ program
 program
     .command('csdb')
     .arguments('<date:yyyymm> <xlsx> <beginRow> <endRow>')
-    .description('合并城市低保数据')
+    .description('导入城市低保数据')
     .usage(String.raw`201902 D:\\精准扶贫\\201902\\2019年2月城市名册.xlsx 2 6531`)
     .action((date, xlsx, beginRow, endRow) => {
-        mergeData({
+        importData({
             type: '城市低保', fetchFunc: fetchCsdbData,
             date, xlsx, beginRow, endRow
         });
@@ -598,10 +717,10 @@ program
 program
     .command('ncdb')
     .arguments('<date:yyyymm> <xlsx> <beginRow> <endRow>')
-    .description('合并农村低保数据')
+    .description('导入农村低保数据')
     .usage(String.raw`201902 D:\\精准扶贫\\201902\\2019年2月雨湖区农村低保名册.xlsx 2 2232`)
     .action((date, xlsx, beginRow, endRow) => {
-        mergeData({
+        importData({
             type: '农村低保', fetchFunc: fetchNcdbData,
             date, xlsx, beginRow, endRow
         });
@@ -610,13 +729,21 @@ program
 program
     .command('cjry')
     .arguments('<date:yyyymm> <xlsx> <beginRow> <endRow>')
-    .description('合并残疾人员数据')
+    .description('导入残疾人员数据')
     .usage(String.raw`201902 D:\\精准扶贫\\201902\\雨湖区全区残疾人20190219.xlsx 2 10212`)
     .action((date, xlsx, beginRow, endRow) => {
-        mergeData({
+        importData({
             type: '残疾人员', fetchFunc: fetchCjData,
             date, xlsx, beginRow, endRow
         });
+    });
+
+program
+    .command('hbsj')
+    .arguments('<date:yyyymm>')
+    .description('合并扶贫数据')
+    .action((date) => {
+        mergeData(date);
     });
 
 program
