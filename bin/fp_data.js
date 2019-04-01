@@ -180,6 +180,35 @@ async function* fetchTkData({ date, xlsx, beginRow, endRow }) {
     }
 }
 
+async function* fetchTkData2({ date, xlsx, beginRow, endRow }) {
+    const workbook = await Xlsx.fromFileAsync(xlsx);
+    const sheet = workbook.sheet(0);
+
+    for (let index = beginRow; index <= endRow; index ++) {
+        const row = sheet.row(index);
+        if (row) {
+            const name = row.cell('C').value(),
+                idcard = String(row.cell('D').value()),
+                birthDay = idcard.substr(6, 8),
+                xzj = row.cell('A').value(),
+                csq = row.cell('B').value();
+
+            let data = {
+                idcard,
+                name,
+                birthDay,
+                xzj, 
+                csq,
+                type: '特困人员',
+                detail: '是',
+                date
+            }
+
+            yield data;
+        }
+    }
+}
+
 /**
  * 迭代获取城市低保数据
  * @param {*} param0 
@@ -697,7 +726,7 @@ program
     .usage(String.raw`201902 D:\\精准扶贫\\201902\\城乡特困201902.xlsx 2 949`)
     .action((date, xlsx, beginRow, endRow) => {
         importData({
-            type: '特困人员', fetchFunc: fetchTkData,
+            type: '特困人员', fetchFunc: fetchTkData2,
             date, xlsx, beginRow, endRow
         });
     });
