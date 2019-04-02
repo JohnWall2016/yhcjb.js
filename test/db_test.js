@@ -1,7 +1,7 @@
 'use strict';
 
 const { it } = require('./logtest');
-const { Database, createFpDb, defineFpBook, Model } = require('../lib/db');
+const { Database, createFpDb, defineFpBook, defineFpHistoryBook, Model } = require('../lib/db');
 
 describe('sequelize test', function() {
 
@@ -135,7 +135,7 @@ describe('sequelize test', function() {
         await db.close();
     });
 
-    it.only('get fpBook fieldNames', async function() {
+    it('get fpBook fieldNames', async function() {
         const db = createFpDb();
         const fpBook = defineFpBook(db);
 
@@ -147,6 +147,32 @@ describe('sequelize test', function() {
         it.log(fpBook.rawAttributes);
 
         await db.close();
-    })
+    });
+
+    it.only('get fpHistoryBook data', async function() {
+        const db = createFpDb();
+        const fpBook = defineFpHistoryBook(db);
+        await fpBook.sync();
+        //const idcard = '430302196512212012';
+        //const idcard = '430321194211134524'; 
+        //const idcard = '430302193805312021'; 
+        const idcard = '430321193910090562';
+        let date = String(Number(idcard.substr(6, 6)) + 6000);
+        const p = await fpBook.findAll({
+            where: {
+                [Database.Op.and]: [
+                    { idcard },
+                    { type: {
+                        [Database.Op.or]:  [ '贫困人口', '特困人员', '全额低保人员', '差额低保人员' ]
+                    } },
+                    { date: {
+                        [Database.Op.gte]: date
+                    } }
+                ]
+            }
+        });
+        it.log(p);
+        await db.close();
+    });
 
 });

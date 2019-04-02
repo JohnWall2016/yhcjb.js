@@ -13,7 +13,7 @@ const {
     DyshInfoRequest, DyshInfoResponse, 
     BankAccountInfoRequest, BankAccountInfoResponse  
 } = require('../lib/service');
-const { Database, createFpDb, defineFpBook } = require('../lib/db');
+const { Database, createFpDb, defineFpHistoryBook } = require('../lib/db');
 
 function stop(msg, code = -1) {
     console.error(msg);
@@ -366,12 +366,27 @@ async function downloadFpdyhdList(fphdXlsx, saveXlsx, dlny) {
         const info = new DyhdInfoResponse(session.get());
         if (info.datas.length > 0) {
             const db = createFpDb();
-            const fpBook = defineFpBook(db);
+            const fpBook = defineFpHistoryBook(db);
             fpBook.sync().then(async () => {
                 for (const data of info.datas) {
                     const idcard = data.idcard;
-                    const p = await fpBook.findOne({ where: { idcard, sypkry: { [Database.Op.ne]: null } } });
-                    if (p) {
+                    const date = String(Number(idcard.substr(6, 6)) + 6000);
+                    const p = await fpBook.findAll({
+                        where: {
+                            [Database.Op.and]: [
+                                { idcard },
+                                { type: {
+                                    [Database.Op.or]:  [ 
+                                        '贫困人口', '特困人员', '全额低保人员', '差额低保人员' 
+                                    ]
+                                } },
+                                { date: {
+                                    [Database.Op.gte]: date
+                                } }
+                            ]
+                        }
+                    });
+                    if (p.length > 0) {
                         const yjnx = data.yjnx;
                         const sjnx = data.sjnx;
                         let qjns = data.yjnx - data.sjnx;
@@ -385,8 +400,8 @@ async function downloadFpdyhdList(fphdXlsx, saveXlsx, dlny) {
                             birthDay: data.birthDay,
                             sex: data.sex,
                             hjxz: data.hjxz,
-                            fpName: p.name,
-                            fpType: p.jbrdsf,
+                            fpName: p[0].name,
+                            fpType: p[0].type, /* TODO(wj): 是否应选取最优先身份 */
                             jbzt: data.state,
                             dyny: data.lqny,
                             yjnx, sjnx, qjns,
