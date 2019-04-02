@@ -11,18 +11,18 @@ const log = createLogger('扶贫数据导入');
  * 合并扶贫数据函数
  * @param { AsyncIterableIterator<> } data
  */
-async function mergeFpData(data, recreate = false) {
+async function mergeFpData(tableName, data, recreate = false) {
     const db = createFpDb();
-    const fpBook = defineFpBook(db);
+    const fpBook = defineFpBook(db, tableName);
 
     if (recreate) {
-        log.info('重新创建扶贫数据底册');
+        log.info(`重新创建${tableName}`);
         await fpBook.sync({ force: true });
     } else {
         await fpBook.sync({ force: false });
     }
 
-    log.info(`开始合并扶贫数据`);
+    log.info(`开始合并扶贫数据至: ${tableName}`);
     let index = 1;
     for await (const d of data) {
         log.info(`${index++} ${d.idcard} ${d.name}`);
@@ -42,7 +42,7 @@ async function mergeFpData(data, recreate = false) {
             }
         }
     }
-    log.info(`结束合并扶贫数据`);
+    log.info(`结束合并扶贫数据至: ${tableName}`);
 
     await db.close();
 }
@@ -367,7 +367,14 @@ async function* fetchCjData({ date, xlsx, beginRow, endRow }) {
     }
 }
 
-function mergeData(date, recreate = false) {
+/**
+ * 合并扶贫数据
+ * @param {string} tableName 
+ * @param {string} date 
+ * @param { { pkry: boolean, recreate: boolean } } param2
+ *  pkry: 是否只合并贫困人员数据, recreate: 重建数据表
+ */
+function mergeData(tableName, date, { pkry = false, recreate = false } = {}) {
     const del = ['no', 'type', 'detail', 'date'];
     const mappings = {
         '贫困人口': {
@@ -404,13 +411,19 @@ function mergeData(date, recreate = false) {
         const db = createFpDb();
         const fpHBook = defineFpHistoryBook(db);
 
-        for (const type of Object.keys(mappings)) { 
+        let types = Object.keys(mappings);
+        if (pkry) {
+            types = [ '贫困人口', '特困人员', '全额低保人员', '差额低保人员' ];
+        }
+        for (const type of types) {
+            log.info(`开始获取并转换: ${type}`);
             let records = await fpHBook.findAll({
                 where: { type, date }
             });
 
             const mapping = mappings[type];
-            for (const data of records) {
+            for (let data of records) {
+                data = data.dataValues;
                 Object.assign(data, mapping.ins);
                 for (const [k, v] of Object.entries(mapping.map)) {
                     data[k] = data[v];
@@ -421,12 +434,13 @@ function mergeData(date, recreate = false) {
 
                 yield data;
             }
+            log.info(`结束获取并转换: ${type}`);
         }
 
         await db.close();
     }
 
-    mergeFpData(fetchFunc(date), recreate);
+    mergeFpData(tableName, fetchFunc(date), recreate);
 }
 
 function importData({ type, fetchFunc, date, xlsx, beginRow, endRow, recreate = false }) {
@@ -462,12 +476,12 @@ const typeMap = {
     }
  }
 
-async function affirmIdentity(date, findOptions) {
+async function affirmIdentity(tableName, date, findOptions) {
     const db = createFpDb();
-    const fpBook = defineFpBook(db);
+    const fpBook = defineFpBook(db, tableName);
     await fpBook.sync({ force: false });
 
-    log.info('开始认定参保人员身份');
+    log.info(`开始认定参保人员身份: ${tableName}`);
 
     const data = await fpBook.findAll(findOptions);
     let i = 1;
@@ -491,7 +505,7 @@ async function affirmIdentity(date, findOptions) {
         }
     }
 
-    log.info('结束认定参保人员身份');
+    log.info(`结束认定参保人员身份: ${tableName}`);
 
     await db.close();
 }
@@ -525,12 +539,12 @@ const exportMap = ({
     Z: 'jbcbqk_date'
 });
 
-async function exportData(tmplXlsx, saveXlsx, findOptions) {
+async function exportData(tableName, tmplXlsx, saveXlsx, findOptions) {
     const db = createFpDb();
-    const fpBook = defineFpBook(db);
+    const fpBook = defineFpBook(db, tableName);
     await fpBook.sync({ force: false });
 
-    log.info('开始导出扶贫底册');
+    log.info(`开始导出扶贫底册: ${tableName}=>${saveXlsx}`);
 
     const data = await fpBook.findAll(findOptions);
     const workbook = await Xlsx.fromFileAsync(tmplXlsx);
@@ -558,7 +572,7 @@ async function exportData(tmplXlsx, saveXlsx, findOptions) {
 
     await workbook.toFileAsync(saveXlsx);
 
-    log.info('结束导出扶贫底册');
+    log.info(`结束导出扶贫底册: ${tableName}=>${saveXlsx}`);
 
     await db.close();
 }
@@ -597,10 +611,10 @@ const jbztMap = [
     [1, 1, '正常缴费'],[2, 2, '暂停缴费']
 ];
 
-async function updateJbzt(date) {
+async function updateJbzt(tableName, date) {
     const db = createFpDb();
 
-    const fpBook = defineFpBook(db);
+    const fpBook = defineFpBook(db, tableName);
     await fpBook.sync({ force: false });
 
     const jbTable = defineJbTable(db);
@@ -608,6 +622,8 @@ async function updateJbzt(date) {
 
     const fpBookFlds = fpBook.getFieldNames();
     const jbTableFlds = jbTable.getFieldNames();
+
+    log.info(`开始更新居保状态: ${tableName}`);
 
     for (const [cbzt, jfzt, jbzt] of jbztMap) {
         const sql = `
@@ -624,6 +640,8 @@ update ${fpBook.name}, ${jbTable.name}
         await db.query(sql);
     }
 
+    log.info(`结束更新居保状态: ${tableName}`);
+
     await db.close();
 }
 
@@ -636,7 +654,7 @@ const jbsfMap = [
     ['残二级',      '022']
 ]
 
-async function exportSfbgxx(dir) {
+async function exportSfbgxx(tableName, dir) {
     const tmplXlsx = 'D:\\精准扶贫\\批量信息变更模板.xlsx';
     const rowsPerXlsx = 500;
 
@@ -649,7 +667,7 @@ async function exportSfbgxx(dir) {
 
     const db = createFpDb();
 
-    const fpBook = defineFpBook(db);
+    const fpBook = defineFpBook(db, tableName);
     await fpBook.sync({ force: false });
 
     const jbTable = defineJbTable(db);
@@ -657,6 +675,8 @@ async function exportSfbgxx(dir) {
 
     const fpBookFlds = fpBook.getFieldNames();
     const jbTableFlds = jbTable.getFieldNames();
+
+    log.info(`从 ${fpBook.name} 和 ${jbTable.name} 导出指信息变更表`);
 
     for (const [type, code] of jbsfMap) {
         const sql = `
@@ -697,6 +717,8 @@ select ${jbTableFlds.name} as name, ${jbTableFlds.idcard} as idcard
             }
         }
     }
+
+    log.info(`结束从 ${fpBook.name} 和 ${jbTable.name} 导出指信息变更表`);
 
     await db.close();
 }
@@ -768,20 +790,28 @@ program
     });
 
 program
-    .command('hbsj')
+    .command('hbdc')
     .arguments('<date:yyyymm>')
-    .description('合并扶贫数据')
+    .description('合并到扶贫历史数据底册')
     .action((date) => {
-        mergeData(date);
+        mergeData('2019年度扶贫历史数据底册', date);
+    });
+
+program
+    .command('scdc')
+    .arguments('<date:yyyymm>')
+    .description('生成当月扶贫数据底册')
+    .action((date) => {
+        mergeData(`扶贫数据底册${date}`, date, { pkry: true, recreate: true});
     });
 
 program
     .command('rdsf')
-    .arguments('<date:yyyymm> [idcards]')
+    .arguments('<tabeName> <date:yyyymm> [idcards]')
     .description('认定居保身份')
-    .usage(String.raw`201902`)
-    .action((date) => {
-        const idcards = process.argv.slice(4);
+    .usage(`2019年度扶贫历史数据底册 201902\n       rdsf 扶贫数据底册201903 201903`)
+    .action((tableName, date) => {
+        const idcards = process.argv.slice(5);
         let findOptions = {}
         if (idcards.length > 0) {
             const where = [];
@@ -794,7 +824,7 @@ program
                 }
             }
         }
-        affirmIdentity(date, findOptions);
+        affirmIdentity(tableName, date, findOptions);
     });
 
 program
@@ -811,8 +841,8 @@ program
     .command('jbzt')
     .arguments('<date:yyyymmdd>')
     .description('更新居保参保状态')
-    .action((date) => {
-        updateJbzt(date);
+    .action((tableName, date) => {
+        updateJbzt(tableName, date);
     });
 
 program
