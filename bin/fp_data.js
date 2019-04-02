@@ -631,9 +631,7 @@ update ${fpBook.name}, ${jbTable.name}
    set ${fpBookFlds.jbcbqk}='${jbzt}', ${fpBookFlds.jbcbqk_date}='${date}'
  where ${fpBookFlds.idcard}=${jbTableFlds.idcard} 
    and ${jbTableFlds.cbzt}='${cbzt}'
-   and ${jbTableFlds.jfzt}='${jfzt}'
-   and (${fpBookFlds.jbcbqk_date} is null or 
-        (${fpBookFlds.jbcbqk} is null or ${fpBookFlds.jbcbqk}<>'${jbzt}'))`;
+   and ${jbTableFlds.jfzt}='${jfzt}'`;
 
         log.info(sql);
 
@@ -654,7 +652,7 @@ const jbsfMap = [
     ['残二级',      '022']
 ]
 
-async function exportSfbgxx(tableName, dir) {
+async function exportSfbgxx(dir) {
     const tmplXlsx = 'D:\\精准扶贫\\批量信息变更模板.xlsx';
     const rowsPerXlsx = 500;
 
@@ -667,7 +665,7 @@ async function exportSfbgxx(tableName, dir) {
 
     const db = createFpDb();
 
-    const fpBook = defineFpBook(db, tableName);
+    const fpBook = defineFpBook(db, '2019年度扶贫历史数据底册');
     await fpBook.sync({ force: false });
 
     const jbTable = defineJbTable(db);
@@ -802,14 +800,14 @@ program
     .arguments('<date:yyyymm>')
     .description('生成当月扶贫数据底册')
     .action((date) => {
-        mergeData(`扶贫数据底册${date}`, date, { pkry: true, recreate: true});
+        mergeData(`${date}扶贫数据底册`, date, { pkry: true, recreate: true});
     });
 
 program
     .command('rdsf')
     .arguments('<tabeName> <date:yyyymm> [idcards]')
     .description('认定居保身份')
-    .usage(`2019年度扶贫历史数据底册 201902\n       rdsf 扶贫数据底册201903 201903`)
+    .usage(`2019年度扶贫历史数据底册 201902\n       rdsf 201903扶贫数据底册 201903`)
     .action((tableName, date) => {
         const idcards = process.argv.slice(5);
         let findOptions = {}
@@ -839,18 +837,19 @@ program
 
 program
     .command('jbzt')
-    .arguments('<date:yyyymmdd>')
+    .arguments('<tableName> <date:yyyymmdd>')
     .description('更新居保参保状态')
+    .usage(`2019年度扶贫历史数据底册 20190305\n       jbzt 201903扶贫数据底册 20190402`)
     .action((tableName, date) => {
         updateJbzt(tableName, date);
     });
 
 program
     .command('dcsj')
-    .arguments('[idcards]')
+    .arguments('<tableName> [idcards]')
     .description('导出扶贫底册数据')
-    .action(() => {
-        const idcards = process.argv.slice(3);
+    .action((tableName) => {
+        const idcards = process.argv.slice(4);
         let findOptions = {}
         if (idcards.length > 0) {
             const where = [];
@@ -864,8 +863,8 @@ program
             }
         }
         const tmplXlsx = 'D:\\精准扶贫\\雨湖区精准扶贫底册模板.xlsx';
-        const saveXlsx = `D:\\精准扶贫\\雨湖区精准扶贫底册${getFormattedDate()}.xlsx`;
-        exportData(tmplXlsx, saveXlsx, findOptions);
+        const saveXlsx = `D:\\精准扶贫\\${tableName}${getFormattedDate()}.xlsx`;
+        exportData(tableName, tmplXlsx, saveXlsx, findOptions);
     });
 
 program
