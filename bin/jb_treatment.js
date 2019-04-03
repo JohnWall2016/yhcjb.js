@@ -20,12 +20,17 @@ function stop(msg, code = -1) {
     process.exit(code);
 }
 
-function getYearMonth(yearMonth) {
+function getYearMonthDay(yearMonth) {
     let m;
-    if (m = yearMonth.match(/^(\d\d\d\d)(\d\d)$/)) {
-        return [m[1], `${m[2][0]=='0'?m[2].substr(1):m[2]}`];
+    if (m = yearMonth.match(/^(\d\d\d\d)(\d\d)(\d\d)$/)) {
+        return [
+            m[1],
+            `${m[2][0]=='0'?m[2].substr(1):m[2]}`, 
+            `${m[3][0]=='0'?m[3].substr(1):m[3]}`,
+            `${m[1]}-${m[2]}-${m[3]}`
+        ];
     } else {
-        stop('年月格式有误');
+        stop('年月日格式有误');
     }
 }
 
@@ -36,46 +41,40 @@ const fphdXlsx = `${rootDir}\\到龄贫困人员待遇核定情况表模板.xlsx
 
 program
     .version('0.0.1')
-    .description('信息核对报告表和养老金计算表生成程序')
+    .description('信息核对报告表和养老金计算表生成程序');
 
 program
     .command('fphd')
-    .arguments('<年-月-日>')
+    .arguments('<date>')
     .description('从业务系统下载生成到龄贫困人员待遇核定情况表')
     .action(date => {
-        let ma, dt;
-        if (ma = date.match(/^(\d\d\d\d)-(\d\d)-(\d\d)$/)) {
-            const [, y, m, d] = ma;
-            dt = `${y}${m}${d}`;
-        } else {
-            stop('日期格式有误');
-        }
-        const saveXlsx = `${rootDir}\\到龄贫困人员待遇核定情况表(截至${dt}).xlsx`;
-        downloadFpdyhdList(fphdXlsx, saveXlsx, date);
-    })
+        const [,,,dt] = getYearMonthDay(date);
+        const saveXlsx = `${rootDir}\\到龄贫困人员待遇核定情况表(截至${date}).xlsx`;
+        downloadFpdyhdList(fphdXlsx, saveXlsx, dt);
+    });
 
 program
     .command('download')
-    .arguments('<年月>')
+    .arguments('<date>')
     .description(
         '从业务系统下载信息核对报告表'
     )
-    .action((yearMonth) => {
-        getYearMonth(yearMonth);
-        const saveXlsx = `${rootDir}\\信息核对报告表${yearMonth}.xlsx`;
+    .action((date) => {
+        getYearMonthDay(date);
+        const saveXlsx = `${rootDir}\\信息核对报告表${date}.xlsx`;
         downloadPaylist(infoXlsx, saveXlsx);
-    })
+    });
 
 program
     .command('split')
-    .arguments('<年月> <开始行> <结束行>')
+    .arguments('<date> <beginRow> <endRow>')
     .description(
         '对下载的信息表分组并生成养老金计算表'
     )
-    .action((yearMonth, start, end) => {
-        const [year, month] = getYearMonth(yearMonth);
+    .action((date, start, end) => {
+        const [year, month] = getYearMonthDay(date);
         if (start && end) {
-            const saveXlsx = `${rootDir}\\信息核对报告表${yearMonth}.xlsx`;
+            const saveXlsx = `${rootDir}\\信息核对报告表${date}.xlsx`;
             const outputDir = `${rootDir}\\${year}年${month}月待遇核定数据`;
             splitPaylist(infoXlsx, saveXlsx, payInfoXslx, outputDir, start, end);
         } else {
@@ -86,9 +85,10 @@ program
 program.on('--help', () => {
     console.log(
         '\n说明\n'+
-        '  年月: 格式 YYYYMM, 如 201901'
+        '  年月日: 格式 YYYYMMDD, 如 20190104'
     );
-})
+});
+
 program.parse(process.argv);
 
 async function downloadPaylist(infoXlsx, saveXlsx) {
@@ -107,15 +107,30 @@ async function downloadPaylist(infoXlsx, saveXlsx) {
 
     if (datas && datas.length > 0) {
         const db = createFpDb();
-        const fpBook = defineFpBook(db);
+        const fpBook = defineFpHistoryBook(db);
         await fpBook.sync();
         for (const data of datas) {
             const idcard = data.idcard;
-            const p = await fpBook.findOne({ where: { idcard, sypkry: { [Database.Op.ne]: null } } });
-            if (p) {
+            const date = String(Number(idcard.substr(6, 6)) + 6000);
+            const p = await fpBook.findAll({
+                where: {
+                    [Database.Op.and]: [
+                        { idcard },
+                        { type: {
+                            [Database.Op.or]:  [ 
+                                '贫困人口', '特困人员', '全额低保人员', '差额低保人员' 
+                            ]
+                        } },
+                        { date: {
+                            [Database.Op.gte]: date
+                        } }
+                    ]
+                }
+            });
+            if (p.length > 0) {
                 data.bz = '按人社厅发〔2018〕111号文办理';
-                data.fpName = p.name;
-                data.fpType = p.jbrdsf;
+                data.fpName = p[0].name;
+                data.fpType = p[0].type;
             } else {
                 data.bz = '';
                 data.fpName = '';
