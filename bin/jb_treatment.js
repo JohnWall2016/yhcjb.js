@@ -85,7 +85,7 @@ program
 program.on('--help', () => {
     console.log(
         '\n说明\n'+
-        '  年月日: 格式 YYYYMMDD, 如 20190104'
+        '  date: 格式 YYYYMMDD, 如 20190104'
     );
 });
 
